@@ -25,3 +25,5 @@ desktop.ini
 *.pdb
 # generated per-stick kit
 installer/dist/
+__pycache__/
+*.pyc
