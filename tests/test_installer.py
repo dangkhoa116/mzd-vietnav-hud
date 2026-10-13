@@ -67,9 +67,27 @@ CP_L1 = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist
 CP_L2 = '            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
 FOREIGN = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/other-mod/libother.so"/>'
 
-DIALOG_STUB = '''#!/bin/sh
+# Behaves like the car's /jci/tools/jci-dialog where it matters: only its
+# own options (anything else: exit 255, nothing shown), and its text layout
+# (split at a literal \n, at most 5 lines, ~50 characters fit the box).
+# Breaking either is logged as DIALOG-BAD. A --no-cancel info box is a
+# background popup; every other dialog takes the next answer from dialog.seq.
+DIALOG_STUB = r'''#!/bin/sh
 echo "jci-dialog $*" >> "@T@/stub.log"
-case "$*" in *--info*) exit 0 ;; esac
+T=""
+for a in "$@"; do
+    case "$a" in
+        --info|--warning|--error|--question|--confirm|--3-button-dialog|--no-cancel|--help) ;;
+        --title=*|--ok-label=*|--cancel-label=*|--button3-label=*) ;;
+        --text=*) T=${a#--text=} ;;
+        *) echo "DIALOG-BAD option $a" >> "@T@/stub.log"; exit 255 ;;
+    esac
+done
+T=${T%\\n}
+printf '%s\n' "$T" | sed 's/\\n/\
+/g' | awk '{ if (length($0) > 52) print "DIALOG-BAD long line: " $0 }
+           END { if (NR > 5) print "DIALOG-BAD " NR " lines" }' >> "@T@/stub.log"
+case "$*" in *--info*--no-cancel*) exit 0 ;; esac
 N=`head -n 1 "@T@/dialog.seq" 2>/dev/null`
 tail -n +2 "@T@/dialog.seq" > "@T@/dialog.seq.new" 2>/dev/null
 mv "@T@/dialog.seq.new" "@T@/dialog.seq"
@@ -123,11 +141,18 @@ class Car:
         self.stub("bin/mount", "mount", '[ -f "@T@/mount-fails" ] && exit 1; exit 0')
         self.stub("bin/smctl", "smctl", "exit 0")
         self.stub("bin/killall", "killall", "exit 0")
-        self.stub("bin/ps", "ps", 'echo "  120 root  /jci/sm/sm -f /jci/sm/sm_WCP.conf"')
+        # dialog-open: how many more ps calls still see a payload's box up
+        self.stub("bin/ps", "ps",
+                  'n=`cat "@T@/dialog-open" 2>/dev/null`\n'
+                  'if [ "${n:-0}" -gt 0 ]; then echo "  300 root  /jci/tools/jci-dialog --info";'
+                  ' echo $((n - 1)) > "@T@/dialog-open"; fi\n'
+                  'echo "  120 root  /jci/sm/sm -f /jci/sm/sm_WCP.conf"')
         self.write("jci/tools/jci-dialog", DIALOG_STUB.replace("@T@", self.t).encode())
         os.chmod(os.path.join(self.t, "jci/tools/jci-dialog"), 0o755)
 
     def write(self, rel, data):
+        if rel == "stub.log":
+            self.stublog()          # keep any DIALOG-BAD before it is cleared
         p = os.path.join(self.t, rel)
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "wb") as f:
@@ -149,13 +174,16 @@ class Car:
         e["PATH"] = self.t + "/bin" + os.pathsep + e.get("PATH", "")
         p = subprocess.run(SH + [self.t + "/" + script] + list(args), capture_output=True,
                            text=True, env=e, timeout=120)
+        self.stublog()
         return p.returncode, p.stdout + p.stderr
 
     def seq(self, *codes):
         self.write("dialog.seq", ("\n".join(str(c) for c in codes) + "\n").encode())
 
     def stublog(self):
-        return (self.read("stub.log") or b"").decode()
+        log = (self.read("stub.log") or b"").decode()
+        BAD_DIALOGS.update(l for l in log.splitlines() if l.startswith("DIALOG-BAD"))
+        return log
 
     def conf(self, name):
         return self.read("jci/sm/" + name).decode()
@@ -171,6 +199,7 @@ class Car:
 
 
 FAILED = []
+BAD_DIALOGS = set()
 
 
 def check(name, ok, info=""):
@@ -400,12 +429,12 @@ def launcher_tests():
     c.seq(1, 9, 9)
     c.run("usb/install-patches.sh")
     check("launcher: missing standard kit is reported, not run",
-          "KHONG CO tren dia" in c.stublog() and "payload" not in c.stublog(), c.stublog())
+          "KHONG CO tren USB" in c.stublog() and "payload" not in c.stublog(), c.stublog())
     c.write("stub.log", b"")
     c.seq(1, 7, 0)
     c.run("usb/install-patches.sh")
     check("launcher: after the report it is back at the chooser",
-          "KHONG CO tren dia" in c.stublog() and "payload tpms" in c.stublog(), c.stublog())
+          "KHONG CO tren USB" in c.stublog() and "payload tpms" in c.stublog(), c.stublog())
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav"])
@@ -428,6 +457,36 @@ def launcher_tests():
     c.run("usb/install-patches.sh")
     check("launcher: LAM TIEP reopens the chooser, XONG leaves",
           "payload vietnav" in c.stublog() and "payload tpms" in c.stublog(), c.stublog())
+
+    # the CarPlay kit restarts the unit: after it, no LAM TIEP
+    c = Car()
+    kits(c, ["tpms", "wcp", "vietnav"])
+    c.seq(1, 0, 0, 0)
+    c.run("usb/install-patches.sh")
+    log = c.stublog()
+    check("launcher: after CARPLAY the session ends (no LAM TIEP)",
+          log.count("payload wcp") == 1 and "LAM TIEP" not in log[log.find("payload wcp"):], log)
+
+    # TPMS ends on a background --info box: it stays until tapped away,
+    # nothing is killed or asked before that
+    c = Car()
+    kits(c, ["tpms", "vietnav"])
+    c.write("usb/tpms-touch.sh", ('#!/bin/sh\necho "payload tpms" >> "%s/stub.log"\n'
+                                  'echo 3 > "%s/dialog-open"\n' % (c.t, c.t)).encode())
+    c.seq(0, 1)
+    c.run("usb/install-patches.sh")
+    after = c.stublog().split("payload tpms")[1]
+    check("launcher: a payload's last message is left until tapped",
+          after.count("ps ") == 4 and "killall" not in after[:after.rfind("ps ")]
+          and "LAM TIEP" in after, c.stublog())
+
+    # a dialog that answers by itself does not spin the chooser
+    c = Car()
+    kits(c, ["tpms", "vietnav"])
+    c.seq(*([1] * 40))
+    rc, out = c.run("usb/install-patches.sh")
+    check("launcher: chooser shown 6 times at most, then ends",
+          rc == 0 and c.stublog().count("--3-button-dialog") == 6, c.stublog())
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav", "other"])
@@ -505,7 +564,8 @@ def build_kit_tests():
     check("build-kit: an older VIETNAV stick's other-touch.sh becomes wcp-touch.sh",
           err is None and rd(d, "wcp-touch.sh") == wcp_payload and rd(d, "other-touch.sh") is None, err)
 
-    newer = shared.replace(b"# mzd-touch-launcher: 1", b"# mzd-touch-launcher: 9")
+    newer = re.sub(rb"# mzd-touch-launcher: \d+", b"# mzd-touch-launcher: 99", shared)
+    assert newer != shared
     d = stick({"install-patches.sh": newer})
     err = bk.place_launcher(d, ours)
     check("build-kit: a newer shared launcher is kept", err is None and rd(d, "install-patches.sh") == newer, err)
@@ -522,6 +582,8 @@ def main():
     launcher_tests()
     touch_tests()
     build_kit_tests()
+    check("jci-dialog: every call is one the car's binary shows in full",
+          not BAD_DIALOGS, "\n".join(sorted(BAD_DIALOGS)))
     print("FAILED %d: %s" % (len(FAILED), ", ".join(FAILED)) if FAILED else "all tests passed")
     return 1 if FAILED else 0
 

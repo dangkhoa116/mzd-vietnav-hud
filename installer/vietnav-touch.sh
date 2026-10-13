@@ -48,9 +48,9 @@ ask3() { # ask3 <title> <text> <ok> <cancel> <b3> -> exit code
         --ok-label="$3" --cancel-label="$4" --button3-label="$5" \
         > /dev/null 2>&1
 }
-say() {          # final message, stays until tapped
+say() {          # final message, one OK button, waits for the tap
     killall -q jci-dialog 2>/dev/null || true
-    "$DIALOG" --OKDialog --title="VIETNAV HUD" --text="$1" > /dev/null 2>&1
+    "$DIALOG" --info --title="VIETNAV HUD" --text="$1" > /dev/null 2>&1
 }
 popup() {        # "working..." box while a script runs
     killall -q jci-dialog 2>/dev/null || true
@@ -86,9 +86,15 @@ log "choice: $choice"
 
 if [ "$choice" = "1" ]; then          # THU THAP
     popup "Dang thu thap... Dung rut USB.\nCollecting... do not remove the USB."
-    sh "$HERE/vietnav-collect.sh" > /tmp/vietnav-collect.out 2>&1
-    cat /tmp/vietnav-collect.out
-    say "THU THAP XONG\n\n$(tail -n 1 /tmp/vietnav-collect.out)"
+    if sh "$HERE/vietnav-collect.sh" > /tmp/vietnav-collect.out 2>&1; then
+        cat /tmp/vietnav-collect.out
+        # just the file name: a dialog line holds ~50 characters
+        F=$(sed -n 's#.*collected: .*/\([^ /]*\) .*#\1#p' /tmp/vietnav-collect.out | tail -n 1)
+        say "THU THAP XONG\n\nDa luu tren USB:\n${F:-vietnav-collect-*.tgz}"
+    else
+        cat /tmp/vietnav-collect.out
+        say "THU THAP LOI\n\nMang USB ve, xem vietnav-touch.log"
+    fi
     exit 0
 fi
 [ "$choice" = "0" ] || exit 0         # HUY / dialog killed

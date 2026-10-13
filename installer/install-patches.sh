@@ -2,7 +2,7 @@
 # install-patches.sh - the shared touch launcher for this stick.
 # Copyright (c) 2026 Dang Khoa (dangkhoa116). MIT License.
 # SPDX-License-Identifier: MIT
-# mzd-touch-launcher: 3
+# mzd-touch-launcher: 4
 #
 # TouchTune's update trigger (github.com/Miatafy/TouchTune, GPL-3.0, by
 # Miatafy) runs a file of this name from the stick root, as root, when
@@ -22,13 +22,15 @@
 # places; a kit whose payload is not on the stick is not hidden - tapping
 # its button says so on screen and comes back to the chooser. The cancel
 # lives one screen deeper: every kit's own menu opens with a HUY (a
-# foreign payload gets a BAT DAU / HUY confirm first), and after a kit
-# finishes, LAM TIEP / XONG asks whether to pick another kit. Sticks with
-# a different mix (a lone standard kit, or an extra "other" kit) get the
-# plain chooser built from what is actually there, one screen per three,
-# behind TIEP. The kit builders replace this file only with the same or a
-# newer "mzd-touch-launcher" version and never overwrite a payload. Each
-# payload checks for itself that the car is up.
+# foreign payload gets a BAT DAU / HUY confirm first). After TPMS or
+# VIETNAV finishes (and its last message is tapped away), LAM TIEP / XONG
+# asks whether to pick another kit; a foreign payload (the CarPlay kit,
+# which restarts the unit) ends the session. Sticks with an extra "other"
+# kit get the plain chooser built from what is actually there: two or
+# three kits on one screen, four on two (TIEP). The kit builders replace
+# this file only with the same or a newer "mzd-touch-launcher" version and
+# never overwrite a payload. Each payload checks for itself that the car
+# is up.
 #
 # BusyBox ash.
 
@@ -62,7 +64,7 @@ desc() {
     case "$1" in
         tpms)    echo "TPMS = ap suat lop / tyre pressure" ;;
         wcp)     echo "CARPLAY = CarPlay khong day / wireless CarPlay" ;;
-        vietnav) echo "VIETNAV = dan duong len HUD / navigation on the HUD" ;;
+        vietnav) echo "VIETNAV = dan duong len HUD / HUD navigation" ;;
         *)       echo "KHAC = bo cai khac / another kit" ;;
     esac
 }
@@ -84,7 +86,7 @@ for k in tpms wcp vietnav; do
     if have "$k"; then
         TEXT="$TEXT`desc \"$k\"`\\n"
     elif [ "$FIXED" = 1 ]; then
-        TEXT="$TEXT`desc \"$k\"` - KHONG CO tren dia / not on this stick\\n"
+        TEXT="$TEXT`label \"$k\"` - KHONG CO tren USB / not on this stick\\n"
     fi
 done
 i=1
@@ -94,6 +96,11 @@ while [ "$i" -le "$N" ]; do
     i=$((i + 1))
 done
 
+# jci-dialog is the car's own (/jci/tools): a 680x354 box, buttons left to
+# right ok=0, cancel=1, button3=2. --text is split at each literal \n into
+# at most 5 lines of at most 63 characters, never wrapped, centred in 24 px
+# Sans: keep a line under ~50 characters or it runs off the box. An option
+# it does not know makes it exit 255 at once, showing nothing.
 ask3() { # ask3 <text> <ok> <cancel> <b3> -> exit code 0/1/other
     killall -q jci-dialog 2>/dev/null || true
     "$DIALOG" --3-button-dialog --title="USB: chon bo cai / choose a kit" \
@@ -106,24 +113,43 @@ ask2() { # ask2 <text> <ok> <cancel> -> exit code 0/1/other
         --text="$1" --ok-label="$2" --cancel-label="$3" \
         > /dev/null 2>&1
 }
-say() { # one-line note, any tap closes it
+say() { # a note with one OK button; waits for the tap
     killall -q jci-dialog 2>/dev/null || true
-    "$DIALOG" --OKDialog --title="USB: chon bo cai / choose a kit" \
+    "$DIALOG" --info --title="USB: chon bo cai / choose a kit" \
         --text="$1" > /dev/null 2>&1
 }
 
-# run <kit>: our own payloads open their own menu (HUY included) and start
-# right away; a foreign payload may start working the moment it is called,
-# so it gets a confirm first. Returns 0 when the kit ran, 1 when it did not.
+# settle: a payload may end on an --info box left running in the
+# background (TPMS does: "ignition off, wait for a dark screen..."), and
+# every question here starts with killall jci-dialog. So wait until that
+# box is tapped away before asking anything. After ~10 minutes give up and
+# end, leaving the message on screen.
+settle() {
+    w=0
+    while ps 2>/dev/null | grep -q '[j]ci-dialog'; do
+        [ "$w" -lt 600 ] || exit 0
+        w=$((w + 1))
+        sleep 1
+    done
+}
+
+# run <kit>: our own payloads open their own menu (HUY included), never
+# restart the unit, and the chooser may come back after them. A foreign
+# payload may start working the moment it is called and may restart the
+# unit (the CarPlay kit does, after a good install or rollback), so it gets
+# a confirm first and then the session is its own: exec, no way back.
+# Returns 0 when a kit ran, 1 when nothing ran.
 run() {
     case "$1" in
         tpms|vietnav) ;;
         *)
             ask2 "`label \"$1\"`: BAT DAU bay gio?\nStart the `label \"$1\"` kit now?" "BAT DAU" "HUY"
             [ "$?" = 0 ] || return 1
+            exec sh "$HERE/$1-touch.sh"
             ;;
     esac
     sh "$HERE/$1-touch.sh"
+    settle
     return 0
 }
 
@@ -131,13 +157,19 @@ run() {
 # screen, not hidden. Returns 0 when a kit ran, 1 when nothing ran.
 pick() {
     if ! have "$1"; then
-        say "`label \"$1\"`: KHONG CO tren dia.\nCopy $1-touch.sh va file cua no ra goc dia USB.\nThe $1 kit is not on this stick."
+        say "`label \"$1\"`: KHONG CO tren USB.\nThe kit is not on this stick."
         return 1
     fi
     run "$1"
 }
 
+ROUND=0
 while :; do
+    # A person taps the chooser a few times at most. A dialog that answers
+    # by itself (GUI not ready, a broken binary) must not spin this loop or
+    # run kits over and over.
+    ROUND=$((ROUND + 1))
+    [ "$ROUND" -le 6 ] || exit 0
     if [ "$FIXED" = 1 ]; then
         # the standard face: same three buttons, whether or not all three
         # kits are on the stick; cancel is inside each kit's own menu
@@ -149,20 +181,20 @@ while :; do
             *) exit 0 ;;
         esac
     elif [ "$N" = 2 ]; then
-        ask3 "$TEXT\\nHUY = Cancel" "`label \"$K1\"`" "`label \"$K2\"`" "HUY"
+        ask3 "${TEXT}HUY = Cancel" "`label \"$K1\"`" "`label \"$K2\"`" "HUY"
         case "$?" in 0) run "$K1" ;; 1) run "$K2" ;; *) exit 0 ;; esac
     elif [ "$N" = 3 ]; then
         # three real payloads (one of them not a standard kit): one screen
         ask3 "$TEXT" "`label \"$K1\"`" "`label \"$K2\"`" "`label \"$K3\"`"
         case "$?" in 0) run "$K1" ;; 1) run "$K2" ;; 2) run "$K3" ;; *) exit 0 ;; esac
     else
-        ask3 "$TEXT\\nTIEP = more" "`label \"$K1\"`" "`label \"$K2\"`" "TIEP"
+        ask3 "${TEXT}TIEP = more" "`label \"$K1\"`" "`label \"$K2\"`" "TIEP"
         case "$?" in
             0) run "$K1" ;;
             1) run "$K2" ;;
             2)
                 if [ "$N" = 4 ]; then
-                    ask3 "$TEXT\\nHUY = Cancel" "`label \"$K3\"`" "`label \"$K4\"`" "HUY"
+                    ask3 "${TEXT}HUY = Cancel" "`label \"$K3\"`" "`label \"$K4\"`" "HUY"
                     case "$?" in 0) run "$K3" ;; 1) run "$K4" ;; *) exit 0 ;; esac
                 fi
                 ;;

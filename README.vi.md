@@ -125,9 +125,11 @@ nhau, không kit nào làm hỏng phần của kit khác.
   nút vẫn hiện, bấm vào sẽ báo ngay trên màn rồi quay lại màn chọn. Nút huỷ
   nằm sâu hơn một màn: menu của mỗi kit mở ra có sẵn HUY (payload kit CarPlay
   không viết cho launcher này nên được hỏi BAT DAU / HUY trước), và sau khi
-  một kit chạy xong, LAM TIEP / XONG hỏi có chọn kit nữa không. Dia lạ hơn
-  (chỉ 1 kit chuẩn, hoặc có kit thứ tư) dùng màn chọn dựng từ những gì thật
-  sự có mặt, nằm sau TIEP. `build-kit.py` của mỗi kit giữ nguyên payload của
+  TPMS hoặc VIETNAV chạy xong và đã bấm đóng thông báo cuối, LAM TIEP / XONG
+  hỏi có chọn kit nữa không; kit CarPlay tự khởi động lại máy nên chạy xong
+  là hết phiên. Dia có thêm kit lạ (không phải 3 kit chuẩn) dùng màn chọn
+  dựng từ những gì thật sự có mặt: 2 hoặc 3 kit trên một màn, 4 kit thì hai
+  màn (TIEP). `build-kit.py` của mỗi kit giữ nguyên payload của
   kit khác, giữ launcher của kit CarPlay thành `wcp-touch.sh`, và không thay
   launcher dùng chung bản mới hơn.
 - **Cả hai file sm.** Gate CarPlay boot `sm_WCP.conf`, nhưng hết lượt chạy thử

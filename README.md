@@ -131,9 +131,11 @@ undoes another's.
   and tapping it says so on screen, then the chooser comes back. The cancel
   lives one screen deeper: every kit's own menu opens with HUY (the CarPlay
   kit's payload, not written for this launcher, gets a BAT DAU / HUY confirm
-  first), and after a kit finishes, LAM TIEP / XONG asks whether to pick
-  another kit. A stick with a different mix (one standard kit, or an extra
-  kit) gets the plain chooser built from what is actually there, behind TIEP.
+  first). After TPMS or VIETNAV finishes and its last message is tapped
+  away, LAM TIEP / XONG asks whether to pick another kit; the CarPlay kit
+  restarts the unit, so it ends the session. A stick with an extra,
+  non-standard kit gets the plain chooser built from what is actually there:
+  two or three kits on one screen, four on two (TIEP).
   Each kit's `build-kit.py` keeps the other kits' payloads, keeps the CarPlay
   kit's launcher as `wcp-touch.sh`, and never replaces a newer shared
   launcher.

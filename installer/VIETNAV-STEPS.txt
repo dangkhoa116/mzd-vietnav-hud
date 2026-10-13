@@ -51,9 +51,10 @@ ONE STICK, SEVERAL KITS
     (TPMS / CARPLAY / VIETNAV) whenever at least two of them are on the
     stick; a kit that is not on the stick keeps its button and tapping it
     says so on screen. The cancel is the HUY inside each kit's menu (the
-    CarPlay kit asks BAT DAU / HUY first), and after a kit finishes
-    LAM TIEP / XONG asks whether to pick another. Each kit only touches
-    its own files.
+    CarPlay kit asks BAT DAU / HUY first). After TPMS or VIETNAV, tap
+    its last message away and LAM TIEP / XONG asks whether to pick
+    another; the CarPlay kit restarts the unit, so it is the last one.
+    Each kit only touches its own files.
   * After the wireless-CarPlay kit's GO BO (rollback), this menu may say
     "chua cai" again: tap CAI DAT to put the HUD lines back.
 
