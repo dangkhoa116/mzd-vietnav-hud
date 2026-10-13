@@ -1,0 +1,25 @@
+# Build products
+*.exe
+*.o
+*.so
+*.a
+road_fold_test
+build/
+out/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+desktop.ini
+*.swp
+.idea/
+.vscode/
+
+# Không bao giờ commit binary app của bên thứ ba
+*.apk
+*.apks
+*.xapk
+*.ipa
+*.dex
+# zig emits .pdb next to exes on Windows
+*.pdb
