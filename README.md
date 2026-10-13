@@ -162,11 +162,19 @@ undoes another's.
       iOS: `startNavigationSession` + `CPMapTemplate` confirmed)
 - [x] Street-name gap diagnosis + on-car adjudication procedure
 - [x] Road-budget patch + host test
-- [ ] On-car confirmation: run VIETMAP LIVE with a debug build and read the
-      `nav16 STATE` road field (`"--"` would close hypothesis H1)
+- [x] Touch install kit for VN firmware (74.00.331): AA mod + CarPlay bridge on
+      one TouchTune stick, with rollback and a diagnostics collect mode; the
+      shared launcher coexists with the TPMS and wireless-CarPlay kits
+- [x] Host checks: 67 checks against a fake CMU, including the install/rollback
+      round trip on the car's own sm configs and every dialog checked against
+      what the car's jci-dialog binary really shows
+- [ ] On-car session: THU THAP (collect) first, then AA, then CarPlay — confirm
+      on FW 74.00.331 and read the street-name behaviour with VIETMAP LIVE
+      (`road="--"` would close hypothesis H1; needs the debug build)
+- [ ] Build the patched AA binaries (road budget 64→256) with the m3 toolchain;
+      the kit currently ships upstream 0.10.0 binaries, the patch lives in
+      [patches/](patches/oem-aa-mod/) as source
 - [ ] Contribute the patch upstream to oem-aa-mod
-- [ ] Unified installer for VN firmware (74.00.331): AA mod + CarPlay bridge +
-      Vietnamese folding
 
 ## License & credits
 

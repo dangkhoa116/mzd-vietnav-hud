@@ -153,11 +153,19 @@ nhau, không kit nào làm hỏng phần của kit khác.
       `startNavigationSession` + `CPMapTemplate` — đã xác nhận)
 - [x] Chẩn đoán khoản trống tên đường + quy trình phân xử trên xe
 - [x] Bản vá road-budget + host test
-- [ ] Xác nhận trên xe: chẩn đoán `road="--"` khi chạy VML (debug build, log
-      `nav16 STATE`)
+- [x] Bộ cài chạm cho firmware VN (74.00.331): AA mod + CarPlay bridge cùng một
+      dia TouchTune, có gỡ cài và chế độ thu thập chẩn đoán; launcher dùng
+      chung sống cùng kit TPMS và kit CarPlay không dây
+- [x] Kiểm tra trên máy: 67 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
+      chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
+      gì binary jci-dialog của xe thật sự hiển thị được
+- [ ] Buổi chạy xe: THU THAP trước, rồi AA, rồi CarPlay — xác nhận trên
+      74.00.331 và đọc hành vi tên đường với VIETMAP LIVE (`road="--"` sẽ chốt
+      giả thuyết H1; cần bản build debug)
+- [ ] Build binary AA đã vá (road budget 64→256) bằng m3 toolchain; kit hiện ship
+      binary upstream 0.10.0, bản vá nằm ở [patches/](patches/oem-aa-mod/) dạng
+      nguồn
 - [ ] Đóng góp bản vá ngược lên upstream oem-aa-mod
-- [ ] Gói cài đặt thống nhất cho firmware VN (74.00.331): AA mod + CarPlay bridge
-      + fold tiếng Việt
 
 ## Giấy phép & ghi công
 
