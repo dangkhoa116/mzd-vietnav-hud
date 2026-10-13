@@ -23,3 +23,5 @@ desktop.ini
 *.dex
 # zig emits .pdb next to exes on Windows
 *.pdb
+# generated per-stick kit
+installer/dist/

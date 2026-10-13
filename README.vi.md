@@ -32,11 +32,40 @@ patches/
   oem-aa-mod/
     0001-hud-nav16-road-budget-64-to-256.patch   Bản vá tên đường VN dài
     README.md                   Cách áp dụng
+installer/
+  build-kit.py                 Tạo bộ kit USB cài qua cảm ứng (TouchTune)
+  install-patches.sh           Launcher TouchTune (cùng cơ chế các kit khác)
+  vietnav-touch.sh             Menu cảm ứng: CÀI ĐẶT / THU THẬP / GỠ BỎ
+  vietnav-install.sh           Installer thật (idempotent, fail-closed)
+  vietnav-rollback.sh          Đảo ngược installer, có kiểm tra an toàn
+  vietnav-collect.sh           Gói chẩn đoán chỉ-đọc cho buổi chạy xe
+  libpatch.conf.vn             Config VN (không thẻ SD: transport vbs, GAL 1.6)
+  VIETNAV-STEPS.txt / .vi.txt  Hướng dẫn trên xe
 tests/
   road_fold_test.cpp           Host test cho bản vá (zig cc, chạy trên PC)
   shim/sys/                    Shim POSIX tối giản để test build trên Windows
   Makefile
 ```
+
+## Cài qua cảm ứng (TouchTune USB)
+
+Bộ installer dùng đúng cơ chế TouchTune USB như các kit khác trên xe này: cắm
+dia → bấm INSTALL trên hộp thoại cập nhật → menu tiếng Việt hiện ra
+(`CAI DAT` cài / `THU THAP` thu thập dữ liệu / `GO BO` gỡ). Không cần bàn phím.
+
+```
+# payload: trỏ VIETNAV_AA_MOD tới bản oem-aa-mod đã build có
+# mazda/build/release/ (áp patches/oem-aa-mod/*.patch trước, build theo
+# docs/build.md của dự án đó); thiếu file .so thì dia vẫn build được và chỉ
+# chạy chế độ THU THẬP.
+python installer/build-kit.py E:\        # hoặc bỏ đối số -> installer/dist/
+```
+
+`build-kit.py` copy file kích hoạt TouchTune từ thư mục all-in-one
+CarPlay-không-dây sang dia nếu dia chưa có (ghi đè bằng `VIETNAV_TOUCHTUNE`);
+nhóm file đó thuộc bản quyền GPL-3.0 của Miatafy nên không commit vào repo.
+Các bước trên xe: [installer/VIETNAV-STEPS.vi.txt](installer/VIETNAV-STEPS.vi.txt)
+([English](installer/VIETNAV-STEPS.txt)).
 
 ## Bản vá: tên đường Việt Nam dài trên HUD
 

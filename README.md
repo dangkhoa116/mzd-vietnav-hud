@@ -32,11 +32,41 @@ patches/
   oem-aa-mod/
     0001-hud-nav16-road-budget-64-to-256.patch   Long-VN-road-name fix
     README.md                   What it changes and how to apply it (tiếng Việt)
+installer/
+  build-kit.py                 Builds the TouchTune USB stick kit
+  install-patches.sh           TouchTune launcher (same mechanism as the other kits)
+  vietnav-touch.sh             Touch menu: install / collect / rollback
+  vietnav-install.sh           The real installer (idempotent, fails closed)
+  vietnav-rollback.sh          Inverse of the installer, sanity-checked
+  vietnav-collect.sh           Read-only diagnostics pack for the car session
+  libpatch.conf.vn             VN runtime config (no nav SD: vbs transport, GAL 1.6)
+  VIETNAV-STEPS.txt / .vi.txt  In-car instructions
 tests/
   road_fold_test.cpp           Host test for the patch (zig cc, runs on a PC)
   shim/sys/                    Minimal POSIX shims so the test builds on Windows
   Makefile
 ```
+
+## Touch install (TouchTune USB)
+
+The installer kit uses the same TouchTune USB mechanism as the other kits for this
+car (insert stick → tap INSTALL on the unit's update dialog → a Vietnamese menu:
+`CAI DAT` install / `THU THAP` collect diagnostics / `GO BO` remove). No keyboard
+needed at the car.
+
+```
+# payload: point VIETNAV_AA_MOD at an oem-aa-mod checkout with
+# mazda/build/release/ populated (apply patches/oem-aa-mod/*.patch first, then
+# build per its docs/build.md); without the .so files the stick still builds
+# and works in COLLECT-only mode.
+python installer/build-kit.py E:\        # or omit the arg -> installer/dist/
+```
+
+`build-kit.py` copies the TouchTune trigger files from the wireless-CarPlay
+all-in-one folder when they are not on the stick (override with
+`VIETNAV_TOUCHTUNE`); they are GPL-3.0 by Miatafy and therefore not committed
+here. In-car steps: [installer/VIETNAV-STEPS.txt](installer/VIETNAV-STEPS.txt)
+([tiếng Việt](installer/VIETNAV-STEPS.vi.txt)).
 
 ## The patch: long Vietnamese street names on the HUD
 

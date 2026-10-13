@@ -1,0 +1,34 @@
+VIETNAV HUD - cac buoc tren xe (cai qua USB TouchTune)
+========================================================
+
+CAN CHUAN BI
+  * Dia USB FAT32 duoc tao boi:  python installer/build-kit.py <o-dia>
+    Gom: install-patches.sh  vietnav-touch.sh  vietnav-install.sh
+         vietnav-rollback.sh vietnav-collect.sh  vietnav-payload/
+         + file kich hoat TouchTune (jci-autoupdate, LAUNCHER.NAME,
+           TOUCHTUNE.ID, LICENSE, NOTICE, <payload>.up)
+  * vietnav-payload/ phai co file .so da build cua oem-aa-mod; thieu thi
+    dia chi hoat dong o che do THU THAP (thu thap du lieu).
+
+CAI DAT (bam cam ung, khong can ban phim)
+  1. Bat dien (ACC / may chay), cho radio khoi dong day du.
+  2. Cam dia USB. May hoi cap nhat sau vai giay.
+  3. Bam CAI DAT. Menu VIETNAV HUD hien len:
+       CAI DAT   -> cai mod, khoi dong lai jciAAPA + aap_service
+       THU THAP  -> ghi vietnav-collect-<ngay>.tgz ra dia USB
+       GO BO     -> (khi da cai) go bo mod
+  4. Sau CAI DAT: cam dien thoai Android, mo dan duong, nhin HUD:
+     mui ten + khoang cach (ten duong: xem docs/vietmap-hud-gap.md).
+
+NEU KHONG THAY HOP THOAI CAP NHAT
+  * Rut dia, doi 10 giay, cam lai. Kiem tra dia FAT32 va o goc co
+    jci-autoupdate + file .up.
+  * Du phong bang terminal (root shell): sh /mnt/sdb1/vietnav-install.sh
+
+BUOI THU THAP (nen lam ngay lan dau)
+  * Bam THU THAP va giu file .tgz - co firmware + sm.conf + XML AAP,
+    quyet dinh cac cau mo (ho tro 74.00.331, nguon ten duong).
+
+GO BO
+  * Cung menu, bam GO BO. Neu mot dich vu khong khoi dong lai duoc thi
+    tat dien khoi dong lai la xong.

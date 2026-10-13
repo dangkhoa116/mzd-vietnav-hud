@@ -1,0 +1,25 @@
+# mzd-vietnav-hud runtime config for oem-aa-mod (Vietnamese cars).
+# Copied to /data_persist/oem-aa-mod/libpatch.conf by vietnav-install.sh.
+# Syntax: key = value per line; '#' comments; booleans true/false/1/0/yes/no.
+
+# Touch input inside Android Auto.
+touch = true
+
+# Turn arrow + distance + street name on the head-up display.
+hud = true
+
+# VN cars ship without the navigation SD card, so the OEM nav service is not
+# running: use the direct VBS writer. (svcnavi needs the SD card.)
+hud_transport = vbs
+
+# Fold precomposed Vietnamese letters (U+1E00-U+1EFF) to HUD-renderable bases
+# (e -> e, o+ -> o...): the HUD font has no glyphs above U+07FF.
+hud_fold_latin = true
+
+# Advertise GAL 1.6 so the phone sends maneuver/lanes/distance for the HUD.
+# Requires the aap_service shim (installed together with jciAAPA here).
+use_protocol_v1_6 = true
+
+# Only matters with hud_transport=svcnavi + nav SD card on EU-blanking units.
+# Leave false on the vbs transport; harmless either way.
+force_street_name = false

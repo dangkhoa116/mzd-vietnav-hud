@@ -1,0 +1,35 @@
+VIETNAV HUD - in-car steps (TouchTune USB install)
+====================================================
+
+WHAT YOU NEED
+  * A FAT32 USB stick built by:  python installer/build-kit.py <stick>:
+      install-patches.sh  vietnav-touch.sh  vietnav-install.sh
+      vietnav-rollback.sh vietnav-collect.sh  vietnav-payload/
+      + the TouchTune trigger files (jci-autoupdate, LAUNCHER.NAME,
+        TOUCHTUNE.ID, LICENSE, NOTICE, <payload>.up)
+  * vietnav-payload/ must contain the built oem-aa-mod .so files; without
+    them the stick still works in COLLECT (diagnostics) mode only.
+
+INSTALL (touch, no keyboard)
+  1. Ignition ON (engine running or ACC), radio fully booted.
+  2. Insert the stick. The update dialog appears after a few seconds.
+  3. Tap INSTALL. The VIETNAV HUD menu appears:
+       CAI DAT   -> installs the mod, restarts jciAAPA + aap_service
+       THU THAP  -> writes vietnav-collect-<date>.tgz to the stick
+       GO BO     -> (when installed) removes the mod
+  4. After CAI DAT: plug in an Android phone, start navigation, watch the
+     HUD for arrow + distance (street name: see docs/vietmap-hud-gap.md).
+
+IF NO DIALOG APPEARS
+  * Pull the stick, wait 10 s, reinsert. Check the stick is FAT32 and its
+    root has jci-autoupdate + the .up trigger file.
+  * Terminal fallback (root shell): sh /mnt/sdb1/vietnav-install.sh
+
+DIAGNOSTICS SESSION (recommended first visit)
+  * Tap THU THAP and keep the .tgz - it carries firmware + sm.conf + the
+    AAP XMLs, which decide the open questions (74.00.331 support, street
+    name source).
+
+UNINSTALL
+  * Same menu, GO BO. A power cycle finishes it if smctl could not
+    restart a service.
