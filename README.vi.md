@@ -34,7 +34,7 @@ patches/
     README.md                   Cách áp dụng
 installer/
   build-kit.py                 Tạo bộ kit USB cài qua cảm ứng (TouchTune)
-  install-patches.sh           Launcher TouchTune (cùng cơ chế các kit khác)
+  install-patches.sh           Launcher TouchTune dùng chung với kit TPMS (chọn kit)
   vietnav-touch.sh             Menu cảm ứng: CÀI ĐẶT / THU THẬP / GỠ BỎ
   vietnav-install.sh           Installer thật (idempotent, fail-closed)
   vietnav-rollback.sh          Đảo ngược installer, có kiểm tra an toàn
@@ -43,6 +43,7 @@ installer/
   VIETNAV-STEPS.txt / .vi.txt  Hướng dẫn trên xe
 tests/
   road_fold_test.cpp           Host test cho bản vá (zig cc, chạy trên PC)
+  test_installer.py            Test installer/rollback/launcher trên CMU giả
   shim/sys/                    Shim POSIX tối giản để test build trên Windows
   Makefile
 ```
@@ -58,7 +59,8 @@ phím. Kit mang **sẵn cả hai mod**:
 
 Menu: `CAI DAT` → chọn **AA / CARPLAY / CA HAI** · `THU THAP` → gói chẩn đoán
 ra dia · `GO BO` → gỡ phần đã cài. Nguồn gốc + md5 từng binary nằm trong
-`vietnav-payload/PAYLOAD-SOURCES.md`.
+`vietnav-payload/PAYLOAD-SOURCES.md`; mỗi lần chạy đều để log trên USB
+(`vietnav-touch.log`, `vietnav-install.log`, `vietnav-rollback.log`).
 
 ```
 python installer/build-kit.py E:\        # hoặc bỏ đối số -> installer/dist/
@@ -70,7 +72,8 @@ python installer/build-kit.py E:\        # hoặc bỏ đối số -> installer/
 ship), và bridge CarPlay qua `VIETNAV_CP_HUD`. Nhóm file kích hoạt TouchTune
 được copy từ thư mục all-in-one CarPlay-không-dây nếu dia chưa có (đổi bằng
 `VIETNAV_TOUCHTUNE`); file đó thuộc GPL-3.0 của Miatafy nên không commit vào
-repo. Mod nào thiếu binary sẽ không xuất hiện trong menu. Các bước trên xe:
+repo. Mod nào thiếu binary sẽ không xuất hiện trong menu. Kiểm tra installer
+trên PC (CMU giả, không cần xe): `python tests/test_installer.py`. Các bước trên xe:
 [installer/VIETNAV-STEPS.vi.txt](installer/VIETNAV-STEPS.vi.txt)
 ([English](installer/VIETNAV-STEPS.txt)).
 
@@ -103,30 +106,34 @@ không còn ký tự 3 byte).
 
 ## Tương thích với các mod khác trên cùng xe
 
-Đối chiếu bằng chính script cài của hai mod xe này đang chạy (kit
-CarPlay không dây và add-on TPMS) — ba mod can thiệp ba lớp khác nhau, cùng
-tồn tại được:
+Đối chiếu với script của hai kit kia trên xe (kit CarPlay không dây và add-on
+TPMS) và có test trong `tests/test_installer.py`: ba kit sửa các file khác
+nhau, không kit nào làm hỏng phần của kit khác.
 
 | Vùng trên CMU | Kit CarPlay không dây | Add-on TPMS | Kit này |
 |---|---|---|---|
-| `sm.conf` / `sm_WCP.conf` | flip `reset_board="no"`, gate boot WCP | không đụng | **chèn thêm** dòng `environ_var` vào block `jciAAPA` / `aap_service` / `jciCARPLAY` |
-| Dịch vụ can thiệp | cấu hình boot (gate `get_board_type`) | wrapper `bds` (bluetooth) + loader HMI | `jciAAPA`, `aap_service`, `jciCARPLAY` |
-| `/etc/aap_system_attributes*.xml` | không đụng | không đụng | thay (có backup `.orig`) |
-| `devmgr_config_master.xml` | không đụng | không đụng | `NaviSupported` TRUE khi cài cp, FALSE khi gỡ |
-| HMI (`developer_mode_GuiConfig.js`) | không đụng | loader TPMS | không đụng |
-| TouchTune cùngdia | `install-patches.sh` của kit đó | `install-patches.sh` của TPMS | build-kit giữ launcher kit kia thành `other-touch.sh`, menu cho chọn cả hai |
+| `/jci/sm/sm.conf`, `sm_WCP.conf` | `reset_board="no"` mọi service trong `sm_WCP.conf`; rollback của nó khôi phục **cả hai** file từ backup riêng | không đụng | **chèn thêm** dòng `environ_var` vào `jciAAPA` / `aap_service` / `jciCARPLAY` ở **cả hai** file, `reset_board="no"` cho ba service đó |
+| File khác trên rootfs | `/jci/scripts/get_board_type.sh` (gate) | `/jci/bds/bds` (wrapper + `bds.real`), một dòng trong `/jci/scripts/stage_wifi.sh` | `/etc/aap_system_attributes*.xml` (backup `.orig`), `NaviSupported` trong `/etc/devmgr_config_master.xml` |
+| `/data/integration` (loader HMI) | không đụng | loader TPMS | không đụng |
+| TouchTune cùng dia | `install-patches.sh` của nó, giữ lại thành `wcp-touch.sh` | `tpms-touch.sh` | `vietnav-touch.sh` |
 
-Lưu ý:
-
-- Các mod còn hỗ trợ nhau: xe đã bật CarPlay không dây thì `get_board_type`
-  trả 2 → installer này chèn đúng `sm_WCP.conf` — config xe thực sự boot
-  (bridge CarPlay vốn thiết kế cho WCP).
-- **Nếu sau này chạy rollback của kit CarPlay không dây** (`wcp-rollback.sh`),
-  nó khôi phục `sm_WCP.conf` nguyên byte từ backup của nó — làm mất các dòng
-  kit này đã chèn, mod tắt âm thầm. Cắm USB chạy lại `CAI DAT` là trở lại
-  (idempotent).
-- Installer **từ chối chủ động** service block đã có `LD_PRELOAD` của mod thứ
-  ba: ghi log rồi bỏ qua dịch vụ đó, không phá — xử lý mod kia trước.
+- **Một dia, ba kit.** `install-patches.sh` là launcher dùng chung với kit TPMS
+  (cùng một file, có dòng phiên bản `mzd-touch-launcher`). Nó tìm các payload
+  `*-touch.sh` trên dia rồi hỏi chạy kit nào (kit thứ ba ở màn hình thứ hai).
+  `build-kit.py` của mỗi kit giữ nguyên payload của kit khác, giữ launcher của
+  kit CarPlay thành `wcp-touch.sh`, và không thay launcher dùng chung bản mới hơn.
+- **Cả hai file sm.** Gate CarPlay boot `sm_WCP.conf`, nhưng hết lượt chạy thử
+  hoặc rollback thì xe boot lại `sm.conf`; dòng của kit này có ở cả hai nên HUD
+  vẫn chạy.
+- **Sau khi rollback kit CarPlay** (`wcp-rollback.sh` / `GO BO` trong menu của
+  nó) hai file sm trở về backup của kit đó, nên dòng của kit này có thể mất: menu
+  VIETNAV sẽ báo *chua cai*, bấm `CAI DAT` là có lại.
+- **reset_board.** Rollback của kit này chỉ trả `reset_board="yes"` ở chỗ lúc
+  cài đã ghi lại là có đổi trong `sm.conf`. `reset_board` của `sm_WCP.conf` là
+  chốt chống boot-loop của kit CarPlay, để nguyên.
+- **Mod khác trong cùng service.** Nếu `jciAAPA`, `aap_service` hoặc
+  `jciCARPLAY` đã có `environ_var` của mod khác, installer dừng trước khi ghi bất
+  cứ gì: không bao giờ cài dở. Xử lý mod kia trước.
 
 ## Trạng thái & lộ trình
 

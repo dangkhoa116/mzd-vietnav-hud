@@ -25,10 +25,12 @@ INSTALL (touch, no keyboard)
 IF NO DIALOG APPEARS
   * Pull the stick, wait 10 s, reinsert. Check the stick is FAT32 and its
     root has jci-autoupdate + the .up trigger file.
-  * Terminal fallback (root shell):
-      sh /mnt/sdb1/vietnav-install.sh aa     (Android Auto only)
-      sh /mnt/sdb1/vietnav-install.sh cp     (CarPlay bridge only)
-      sh /mnt/sdb1/vietnav-install.sh all    (both)
+  * Terminal fallback (root shell; the stick is /tmp/mnt/sda1 with the
+    keyboard in the other port). Without --yes it is a dry run:
+      sh /tmp/mnt/sda1/vietnav-install.sh all           (check, change nothing)
+      sh /tmp/mnt/sda1/vietnav-install.sh aa --yes      (Android Auto only)
+      sh /tmp/mnt/sda1/vietnav-install.sh cp --yes      (CarPlay bridge only)
+      sh /tmp/mnt/sda1/vietnav-install.sh all --yes     (both)
 
 DIAGNOSTICS SESSION (recommended first visit)
   * Tap THU THAP and keep the .tgz - it carries firmware + sm.conf + the
@@ -39,9 +41,20 @@ UNINSTALL
   * Same menu, GO BO. A power cycle finishes it if smctl could not
     restart a service.
 
+LOGS
+  * Every run leaves its log on the stick: vietnav-touch.log,
+    vietnav-install.log, vietnav-rollback.log. Bring the stick home.
+
+ONE STICK, SEVERAL KITS
+  * The stick may also carry the TPMS and wireless-CarPlay kits. Tapping
+    INSTALL first asks which kit (TPMS / CARPLAY / VIETNAV; a third kit is
+    behind TIEP). Each kit only touches its own files.
+  * After the wireless-CarPlay kit's GO BO (rollback), this menu may say
+    "chua cai" again: tap CAI DAT to put the HUD lines back.
+
 NOTES
-  * Installing on a unit whose jciCARPLAY/jciAAPA block already has an
-    LD_PRELOAD from another mod: the installer SKIPS that service and
-    says so in the log - sort the other mod out first.
+  * Installing on a unit whose jciCARPLAY/jciAAPA/aap_service block already
+    has an environ_var from another mod: the installer STOPS before changing
+    anything and says so in the log - sort the other mod out first.
   * The CarPlay install sets NaviSupported=TRUE (what makes the iPhone
-    stream maneuvers); rollback restores FALSE.
+    stream maneuvers); rollback puts FALSE back only if it was FALSE.

@@ -22,9 +22,14 @@ checkout locations):
 Files are copied byte for byte (LF endings) and checked for CR bytes, which
 BusyBox sh would choke on. A mod whose binaries are missing is dropped from
 the kit (the touch menu then does not offer it) instead of failing the build.
+
+The stick can also carry the TPMS and wireless-CarPlay touch kits:
+install-patches.sh is a launcher shared by all kits (see place_launcher), and
+the other kits' payloads (tpms-touch.sh, wcp-touch.sh, ...) are never touched.
 """
 import hashlib
 import os
+import re
 import shutil
 import sys
 import time
@@ -33,8 +38,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 HOME = os.path.expanduser("~")
 
+LAUNCHER = os.path.join(HERE, "install-patches.sh")
 ROOT_FILES = {
-    "install-patches.sh": os.path.join(HERE, "install-patches.sh"),
     "vietnav-touch.sh": os.path.join(HERE, "vietnav-touch.sh"),
     "vietnav-install.sh": os.path.join(HERE, "vietnav-install.sh"),
     "vietnav-rollback.sh": os.path.join(HERE, "vietnav-rollback.sh"),
@@ -46,6 +51,37 @@ ROOT_FILES = {
 DEFAULTS = os.path.join(HOME, "Downloads", "mzd", "hud-dev")
 
 
+def sha256sums_note(d):
+    """Checks the .so files in d against a SHA256SUMS file next to them (or
+    one folder up), and says what was found. Never claims a check that did
+    not happen."""
+    for sums in (os.path.join(d, "SHA256SUMS"), os.path.join(os.path.dirname(d), "SHA256SUMS")):
+        if not os.path.isfile(sums):
+            continue
+        want = {}
+        with open(sums) as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) == 2:
+                    want[os.path.basename(parts[1].lstrip("*"))] = parts[0].lower()
+        for n in os.listdir(d):
+            if n.endswith(".so") and n in want:
+                with open(os.path.join(d, n), "rb") as f:
+                    if hashlib.sha256(f.read()).hexdigest() != want[n]:
+                        sys.exit("!! %s does not match %s - nothing written" % (n, sums))
+        return "SHA256SUMS checked"
+    return "no SHA256SUMS found, not checked"
+
+
+def patch_applied(checkout):
+    h = os.path.join(checkout, "mazda", "patches", "blmjciaapa", "hud", "hud_nav16.h")
+    try:
+        with open(h, "rb") as f:
+            return b"road[256]" in f.read()
+    except OSError:
+        return False
+
+
 def pick_aa_sources():
     """(dir, origin) for the oem-aa-mod binaries + resources."""
     checkout = os.environ.get("VIETNAV_AA_MOD") or os.path.join(DEFAULTS, "oem-aa-mod")
@@ -54,10 +90,12 @@ def pick_aa_sources():
     if os.path.isdir(os.path.join(checkout, "mazda", "build", "release")):
         return (os.path.join(checkout, "mazda", "build", "release"),
                 os.path.join(checkout, "resources"),
-                "oem-aa-mod source build (patches/oem-aa-mod applied)")
+                "oem-aa-mod source build (%s)" % (
+                    "road-budget patch applied" if patch_applied(checkout)
+                    else "WITHOUT the road-budget patch"))
     if os.path.isdir(release):
         return (release, os.path.join(release, "resources"),
-                "oem-aa-mod upstream release 0.10.0 (github releases, SHA256SUMS verified)")
+                "oem-aa-mod upstream release 0.10.0 (%s)" % sha256sums_note(release))
     return (None, None, None)
 
 
@@ -71,20 +109,33 @@ def pick_cp_source():
     return default if os.path.isfile(default) else None
 
 
+AA_REQUIRED = ("libpatch-blmjciaapa.so", "libpatch-aap_service.so", "libpatch.conf",
+               "aap_system_attributes.xml", "aap_system_attributes_UCP.xml")
+
+
 def payload_map():
     """name -> (src, origin) for every payload file that is available."""
     out = {}
     aa_bin, aa_res, aa_origin = pick_aa_sources()
     if aa_bin:
+        aa = {}
         for n in ("libpatch-blmjciaapa.so", "libpatch-aap_service.so",
                   "libpatch-svcjcinavi.so"):
             p = os.path.join(aa_bin, n)
             if os.path.isfile(p):
-                out[n] = (p, aa_origin)
+                aa[n] = (p, aa_origin)
         for n in ("aap_system_attributes.xml", "aap_system_attributes_UCP.xml"):
             p = os.path.join(aa_res, n)
             if os.path.isfile(p):
-                out[n] = (p, aa_origin)
+                aa[n] = (p, aa_origin)
+        # vietnav-install.sh needs all of these; a partial set is not shipped,
+        # so the touch menu never offers an AA install that would fail.
+        missing = [n for n in AA_REQUIRED if n not in aa and n != "libpatch.conf"]
+        if missing:
+            print("note: oem-aa-mod set incomplete (%s missing) - AA not shipped"
+                  % ", ".join(missing))
+        else:
+            out.update(aa)
     out["libpatch.conf"] = (os.path.join(HERE, "libpatch.conf.vn"),
                             "mzd-vietnav-hud (this repo)")
     cp = pick_cp_source()
@@ -101,9 +152,58 @@ TOUCHTUNE = os.environ.get("VIETNAV_TOUCHTUNE") or os.path.join(
     HOME, "Downloads", "mzd-wireless-carplay-v1.0.3-ALL-IN-ONE")
 TOUCHTUNE_FILES = ("jci-autoupdate", "LAUNCHER.NAME", "TOUCHTUNE.ID", "LICENSE", "NOTICE")
 
-# This launcher marks itself, so another kit's payload already on the stick
-# can be told apart and kept (renamed, never overwritten).
-LAUNCHER_MARK = b"the touch launcher for this stick"
+# --- the shared touch launcher ----------------------------------------------
+# install-patches.sh is the same file in every kit (TPMS, VIETNAV, ...): it
+# only picks one of the *-touch.sh payloads on the stick. Keep this block in
+# step with the TPMS kit's build-kit.py.
+SHARED_MARK = re.compile(rb"^# mzd-touch-launcher: (\d+)$", re.M)
+# The first launchers (TPMS, VIETNAV) said this and knew one other kit only.
+OLD_MARK = b"the touch launcher for this stick"
+
+
+def launcher_version(body):
+    m = SHARED_MARK.search(body)
+    return int(m.group(1)) if m else None
+
+
+def place_launcher(dest, ours_path):
+    """Puts the shared launcher at dest/install-patches.sh without losing any
+    kit's payload. Returns None, or an error string (nothing written then)."""
+    with open(ours_path, "rb") as f:
+        ours = f.read()
+    old = os.path.join(dest, "install-patches.sh")
+    plan = []                                   # renames, done only if all is well
+    # An older stick of ours kept the CarPlay payload as other-touch.sh.
+    other = os.path.join(dest, "other-touch.sh")
+    wcp = os.path.join(dest, "wcp-touch.sh")
+    if os.path.isfile(other) and not os.path.exists(wcp):
+        with open(other, "rb") as f:
+            if b"wcp-enable.sh" in f.read():
+                plan.append((other, wcp))
+    if os.path.isfile(old):
+        with open(old, "rb") as f:
+            body = f.read()
+        v = launcher_version(body)
+        if v is not None:
+            if v > launcher_version(ours):
+                print("note: the stick has a newer shared launcher (v%d) - kept" % v)
+                ours = None
+        elif OLD_MARK not in body:
+            # Another kit's own payload (the CarPlay kit's, typically): keep it.
+            keep = wcp if b"wcp-enable.sh" in body else other
+            leaving = [src for src, _ in plan]
+            if (os.path.exists(keep) and keep not in leaving) or any(dst == keep for _, dst in plan):
+                return ("%s is another kit's payload and %s already exists - sort "
+                        "the stick out by hand" % (old, keep))
+            plan.append((old, keep))
+    for src, dst in plan:
+        os.rename(src, dst)
+        print("kept %s as %s" % (os.path.basename(src), os.path.basename(dst)))
+    if ours is not None:
+        with open(old, "wb") as f:
+            f.write(ours)
+    return None
+
 
 BINARY_EXT = (".png", ".jpg", ".gif", ".bts", ".so")
 
@@ -140,25 +240,18 @@ def main():
     payload = payload_map()
 
     # Check everything first, so a bad file never leaves a half-built stick.
-    errors = [e for name, src in list(ROOT_FILES.items()) + [(n, s) for n, (s, _) in payload.items()]
+    errors = [e for name, src in list(ROOT_FILES.items()) + [("install-patches.sh", LAUNCHER)]
+              + [(n, s) for n, (s, _) in payload.items()]
               for e in [check(src, name)] if e]
     if errors:
         sys.exit("!! " + "\n!! ".join(errors) + "\nnothing written")
     os.makedirs(dest, exist_ok=True)
 
-    # Another kit's touch payload already on the stick keeps working: it
-    # becomes other-touch.sh, which our launcher offers next to VIETNAV.
-    old = os.path.join(dest, "install-patches.sh")
-    if os.path.isfile(old):
-        with open(old, "rb") as f:
-            body = f.read()
-        if LAUNCHER_MARK not in body:
-            keep = os.path.join(dest, "other-touch.sh")
-            if os.path.exists(keep):
-                sys.exit("!! %s is not ours and %s already exists - sort the "
-                         "stick out by hand; nothing written" % (old, keep))
-            os.rename(old, keep)
-            print("kept the other kit's touch payload as other-touch.sh")
+    # The shared launcher goes in first: it is the only file another kit
+    # might also own, and it fails before anything is written.
+    err = place_launcher(dest, LAUNCHER)
+    if err:
+        sys.exit("!! " + err + "; nothing written")
 
     # TouchTune's trigger: copied when the stick does not have it yet.
     up = [f for f in os.listdir(TOUCHTUNE) if f.endswith(".up")] if os.path.isdir(TOUCHTUNE) else []
@@ -179,7 +272,7 @@ def main():
         copy(src, os.path.join(dest, name))
 
     # What the menu can offer.
-    have_aa = "libpatch-blmjciaapa.so" in payload and "libpatch-aap_service.so" in payload
+    have_aa = all(n in payload for n in AA_REQUIRED)
     have_cp = "libpatch-blmjcicarplay.so" in payload
     if not have_aa:
         print("note: oem-aa-mod binaries not found (VIETNAV_AA_MOD / "
@@ -203,9 +296,11 @@ def main():
         f.write("# Payload provenance\n\n")
         f.write("| file | md5 | source |\n|---|---|---|\n")
         for name, (src, origin) in sorted(payload.items()):
-            f.write("| %s | `%s` | %s |\n" % (name, md5(src), origin))
-        f.write("\nBinaries ship as published by their upstream projects"
-                " (AGPL-3.0); sources: oem-aa-mod and mazda-carplay-hud on GitHub.\n")
+            # md5 of the file as it is on the stick (text files are LF-normalised)
+            f.write("| %s | `%s` | %s |\n" % (name, md5(os.path.join(new, name)), origin))
+        f.write("\nThe binaries are AGPL-3.0; their sources are oem-aa-mod and"
+                " mazda-carplay-hud on GitHub (plus this repo's patches/ for a"
+                " patched source build).\n")
     for attempt in range(10):
         try:
             if os.path.isdir(kit):
@@ -217,7 +312,7 @@ def main():
                 raise
             time.sleep(0.5)
     print("kit written to %s (%d files + %d payload, AA=%s CP=%s)"
-          % (dest, len(ROOT_FILES), len(payload) + 1, have_aa, have_cp))
+          % (dest, len(ROOT_FILES) + 1, len(payload) + 1, have_aa, have_cp))
 
 
 if __name__ == "__main__":

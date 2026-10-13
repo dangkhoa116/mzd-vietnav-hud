@@ -34,7 +34,7 @@ patches/
     README.md                   What it changes and how to apply it (tiếng Việt)
 installer/
   build-kit.py                 Builds the TouchTune USB stick kit
-  install-patches.sh           TouchTune launcher (same mechanism as the other kits)
+  install-patches.sh           TouchTune launcher, shared with the TPMS kit (picks a kit)
   vietnav-touch.sh             Touch menu: install / collect / rollback
   vietnav-install.sh           The real installer (idempotent, fails closed)
   vietnav-rollback.sh          Inverse of the installer, sanity-checked
@@ -43,6 +43,7 @@ installer/
   VIETNAV-STEPS.txt / .vi.txt  In-car instructions
 tests/
   road_fold_test.cpp           Host test for the patch (zig cc, runs on a PC)
+  test_installer.py            Installer/rollback/launcher against a fake CMU
   shim/sys/                    Minimal POSIX shims so the test builds on Windows
   Makefile
 ```
@@ -58,7 +59,8 @@ No keyboard needed at the car. The kit ships **both mods ready to install**:
 
 Menu: `CAI DAT` → pick **AA / CARPLAY / CA HAI** · `THU THAP` → diagnostics pack
 to the stick · `GO BO` → removes what is installed. Payload provenance and md5s
-land in `vietnav-payload/PAYLOAD-SOURCES.md`.
+land in `vietnav-payload/PAYLOAD-SOURCES.md`; every run leaves its log on the
+stick (`vietnav-touch.log`, `vietnav-install.log`, `vietnav-rollback.log`).
 
 ```
 python installer/build-kit.py E:\        # or omit the arg -> installer/dist/
@@ -72,6 +74,8 @@ also copies the TouchTune trigger files from the wireless-CarPlay all-in-one
 folder when they are not on the stick (override with `VIETNAV_TOUCHTUNE`);
 they are GPL-3.0 by Miatafy and therefore not committed here. A mod whose
 binaries are missing is simply not offered in the menu.
+
+Installer checks on a PC (fake CMU, no car): `python tests/test_installer.py`.
 
 In-car steps: [installer/VIETNAV-STEPS.txt](installer/VIETNAV-STEPS.txt)
 ([tiếng Việt](installer/VIETNAV-STEPS.vi.txt)).
@@ -106,31 +110,38 @@ renderable bytes).
 
 ## Compatibility with other mods on the same car
 
-Verified against the install scripts of the two mods this car already runs
-(the wireless-CarPlay kit and the TPMS add-on) — the three touch different
-layers, so they can coexist:
+Checked against the scripts of the two other kits on this car (the
+wireless-CarPlay kit and the TPMS add-on), and covered by
+`tests/test_installer.py`: the three touch different files, and none of them
+undoes another's.
 
 | Area on the CMU | Wireless-CarPlay kit | TPMS add-on | This kit |
 |---|---|---|---|
-| `sm.conf` / `sm_WCP.conf` | flips `reset_board="no"`, WCP boot gate | not touched | **adds** `environ_var` lines to the `jciAAPA` / `aap_service` / `jciCARPLAY` blocks |
-| Service touched | boot config (`get_board_type` gate) | `bds` wrapper (Bluetooth) + HMI loader | `jciAAPA`, `aap_service`, `jciCARPLAY` |
-| `/etc/aap_system_attributes*.xml` | not touched | not touched | replaced (`.orig` backups) |
-| `devmgr_config_master.xml` | not touched | not touched | `NaviSupported` TRUE on cp install, FALSE on rollback |
-| HMI (`developer_mode_GuiConfig.js`) | not touched | TPMS loader | not touched |
-| TouchTune on the same stick | its `install-patches.sh` | its `install-patches.sh` | build-kit keeps the other kit's launcher as `other-touch.sh` and the menu offers both |
+| `/jci/sm/sm.conf`, `sm_WCP.conf` | `reset_board="no"` on every service in `sm_WCP.conf`; its rollback restores **both** files from its own backups | not touched | **adds** `environ_var` lines to `jciAAPA` / `aap_service` / `jciCARPLAY` in **both** files, `reset_board="no"` on those three |
+| Other root-fs files | `/jci/scripts/get_board_type.sh` (the gate) | `/jci/bds/bds` (wrapper + `bds.real`), one line in `/jci/scripts/stage_wifi.sh` | `/etc/aap_system_attributes*.xml` (`.orig` backups), `NaviSupported` in `/etc/devmgr_config_master.xml` |
+| `/data/integration` (HMI loader) | not touched | TPMS loader | not touched |
+| TouchTune on the same stick | its own `install-patches.sh`, kept as `wcp-touch.sh` | `tpms-touch.sh` | `vietnav-touch.sh` |
 
-Notes:
-
-- The mods even help each other: with wireless CarPlay enabled,
-  `get_board_type` returns 2, so this installer patches `sm_WCP.conf` — the
-  config the unit actually boots (the CarPlay bridge is designed for WCP).
-- **If you later run the wireless-CarPlay kit's rollback** (`wcp-rollback.sh`),
-  it restores `sm_WCP.conf` byte-for-byte from its own backup, which removes
-  the lines this kit inserted — the mod simply goes silent. Re-run `CAI DAT`
-  to restore them (idempotent).
-- The installer **refuses by design** any service block that already carries a
-  `LD_PRELOAD` from a third mod: it logs the skip and leaves that service
-  untouched. Sort the other mod out first.
+- **One stick, three kits.** `install-patches.sh` is a launcher shared with the
+  TPMS kit (same file, `mzd-touch-launcher` version line). It finds the
+  `*-touch.sh` payloads on the stick and asks which one (a third kit is on a
+  second screen). Each kit's `build-kit.py` keeps the other kits' payloads,
+  keeps the CarPlay kit's launcher as `wcp-touch.sh`, and never replaces a
+  newer shared launcher.
+- **Both sm configs.** The CarPlay gate boots `sm_WCP.conf`, but a trial that
+  runs out, or its rollback, boots `sm.conf` again; this kit's lines are in
+  both, so the HUD keeps working either way.
+- **After the CarPlay kit's rollback** (`wcp-rollback.sh` / `GO BO` in its
+  menu) both sm files are back to that kit's backups, so this kit's lines may
+  be gone: the VIETNAV menu then says *chua cai* again, and `CAI DAT` puts them
+  back.
+- **reset_board.** This rollback puts `reset_board="yes"` back only where the
+  install recorded changing it in `sm.conf`. `sm_WCP.conf`'s `reset_board` is
+  the CarPlay kit's boot-loop guard and is left as it is.
+- **Another mod in the same service.** If `jciAAPA`, `aap_service` or
+  `jciCARPLAY` already has an `environ_var` from a mod other than this one, the
+  install stops before writing anything: no half install. Sort the other mod out
+  first.
 
 ## Status & roadmap
 

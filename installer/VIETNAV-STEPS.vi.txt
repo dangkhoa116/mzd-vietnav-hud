@@ -25,10 +25,12 @@ CAI DAT (bam cam ung, khong can ban phim)
 NEU KHONG THAY HOP THOAI CAP NHAT
   * Rut dia, doi 10 giay, cam lai. Kiem tra dia FAT32 va o goc co
     jci-autoupdate + file .up.
-  * Du phong bang terminal (root shell):
-      sh /mnt/sdb1/vietnav-install.sh aa     (chi Android Auto)
-      sh /mnt/sdb1/vietnav-install.sh cp     (chi CarPlay)
-      sh /mnt/sdb1/vietnav-install.sh all    (ca hai)
+  * Du phong bang terminal (root shell; dia la /tmp/mnt/sda1 khi ban phim
+    cam cong kia). Khong co --yes thi chi chay thu, khong doi gi:
+      sh /tmp/mnt/sda1/vietnav-install.sh all           (kiem tra, khong doi gi)
+      sh /tmp/mnt/sda1/vietnav-install.sh aa --yes      (chi Android Auto)
+      sh /tmp/mnt/sda1/vietnav-install.sh cp --yes      (chi CarPlay)
+      sh /tmp/mnt/sda1/vietnav-install.sh all --yes     (ca hai)
 
 BUOI THU THAP (nen lam ngay lan dau)
   * Bam THU THAP va giu file .tgz - co firmware + sm.conf + XML AAP,
@@ -38,8 +40,20 @@ GO BO
   * Cung menu, bam GO BO. Neu mot dich vu khong khoi dong lai duoc thi
     tat dien khoi dong lai la xong.
 
+LOG
+  * Moi lan chay deu de log tren dia USB: vietnav-touch.log,
+    vietnav-install.log, vietnav-rollback.log. Mang dia ve nha.
+
+MOT DIA, NHIEU KIT
+  * Dia co the mang ca kit TPMS va kit CarPlay khong day. Bam INSTALL se
+    hoi chon kit truoc (TPMS / CARPLAY / VIETNAV; kit thu ba nam sau TIEP).
+    Moi kit chi dung vao file cua no.
+  * Sau khi GO BO (rollback) kit CarPlay khong day, menu nay co the bao
+    "chua cai" lai: bam CAI DAT de dua dong HUD tro lai.
+
 LUU Y
-  * Neu block jciCARPLAY/jciAAPA da co LD_PRELOAD cua mod khac: installer
-    se BO QUA dich vu do va ghi ro trong log - xu ly mod kia truoc.
+  * Neu block jciCARPLAY/jciAAPA/aap_service da co environ_var cua mod khac:
+    installer DUNG truoc khi doi bat cu gi va ghi ro trong log - xu ly mod
+    kia truoc.
   * Ben CarPlay, qua trinh cai dat dat NaviSupported=TRUE (de iPhone gui
-    du lieu dan duong iAP2); go bo se tra ve FALSE.
+    du lieu dan duong iAP2); go bo chi tra ve FALSE neu truoc do la FALSE.
