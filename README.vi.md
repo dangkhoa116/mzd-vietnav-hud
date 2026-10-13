@@ -101,6 +101,33 @@ python -m ziglang c++ -std=c++17 \
 Kỳ vọng: `RESULT: ALL PASS` (tên 81 byte raw → decode nguyên vẹn → fold còn 72 byte,
 không còn ký tự 3 byte).
 
+## Tương thích với các mod khác trên cùng xe
+
+Đối chiếu bằng chính script cài của hai mod xe này đang chạy (kit
+CarPlay không dây và add-on TPMS) — ba mod can thiệp ba lớp khác nhau, cùng
+tồn tại được:
+
+| Vùng trên CMU | Kit CarPlay không dây | Add-on TPMS | Kit này |
+|---|---|---|---|
+| `sm.conf` / `sm_WCP.conf` | flip `reset_board="no"`, gate boot WCP | không đụng | **chèn thêm** dòng `environ_var` vào block `jciAAPA` / `aap_service` / `jciCARPLAY` |
+| Dịch vụ can thiệp | cấu hình boot (gate `get_board_type`) | wrapper `bds` (bluetooth) + loader HMI | `jciAAPA`, `aap_service`, `jciCARPLAY` |
+| `/etc/aap_system_attributes*.xml` | không đụng | không đụng | thay (có backup `.orig`) |
+| `devmgr_config_master.xml` | không đụng | không đụng | `NaviSupported` TRUE khi cài cp, FALSE khi gỡ |
+| HMI (`developer_mode_GuiConfig.js`) | không đụng | loader TPMS | không đụng |
+| TouchTune cùngdia | `install-patches.sh` của kit đó | `install-patches.sh` của TPMS | build-kit giữ launcher kit kia thành `other-touch.sh`, menu cho chọn cả hai |
+
+Lưu ý:
+
+- Các mod còn hỗ trợ nhau: xe đã bật CarPlay không dây thì `get_board_type`
+  trả 2 → installer này chèn đúng `sm_WCP.conf` — config xe thực sự boot
+  (bridge CarPlay vốn thiết kế cho WCP).
+- **Nếu sau này chạy rollback của kit CarPlay không dây** (`wcp-rollback.sh`),
+  nó khôi phục `sm_WCP.conf` nguyên byte từ backup của nó — làm mất các dòng
+  kit này đã chèn, mod tắt âm thầm. Cắm USB chạy lại `CAI DAT` là trở lại
+  (idempotent).
+- Installer **từ chối chủ động** service block đã có `LD_PRELOAD` của mod thứ
+  ba: ghi log rồi bỏ qua dịch vụ đó, không phá — xử lý mod kia trước.
+
 ## Trạng thái & lộ trình
 
 - [x] Phân tích tĩnh VIETMAP LIVE (Android `updateTrip(Trip)` — đã xác nhận; iOS

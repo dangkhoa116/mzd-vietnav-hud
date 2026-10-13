@@ -104,6 +104,34 @@ python -m ziglang c++ -std=c++17 \
 Expected output: `RESULT: ALL PASS` (an 81-byte raw name decodes intact, folds to 72
 renderable bytes).
 
+## Compatibility with other mods on the same car
+
+Verified against the install scripts of the two mods this car already runs
+(the wireless-CarPlay kit and the TPMS add-on) — the three touch different
+layers, so they can coexist:
+
+| Area on the CMU | Wireless-CarPlay kit | TPMS add-on | This kit |
+|---|---|---|---|
+| `sm.conf` / `sm_WCP.conf` | flips `reset_board="no"`, WCP boot gate | not touched | **adds** `environ_var` lines to the `jciAAPA` / `aap_service` / `jciCARPLAY` blocks |
+| Service touched | boot config (`get_board_type` gate) | `bds` wrapper (Bluetooth) + HMI loader | `jciAAPA`, `aap_service`, `jciCARPLAY` |
+| `/etc/aap_system_attributes*.xml` | not touched | not touched | replaced (`.orig` backups) |
+| `devmgr_config_master.xml` | not touched | not touched | `NaviSupported` TRUE on cp install, FALSE on rollback |
+| HMI (`developer_mode_GuiConfig.js`) | not touched | TPMS loader | not touched |
+| TouchTune on the same stick | its `install-patches.sh` | its `install-patches.sh` | build-kit keeps the other kit's launcher as `other-touch.sh` and the menu offers both |
+
+Notes:
+
+- The mods even help each other: with wireless CarPlay enabled,
+  `get_board_type` returns 2, so this installer patches `sm_WCP.conf` — the
+  config the unit actually boots (the CarPlay bridge is designed for WCP).
+- **If you later run the wireless-CarPlay kit's rollback** (`wcp-rollback.sh`),
+  it restores `sm_WCP.conf` byte-for-byte from its own backup, which removes
+  the lines this kit inserted — the mod simply goes silent. Re-run `CAI DAT`
+  to restore them (idempotent).
+- The installer **refuses by design** any service block that already carries a
+  `LD_PRELOAD` from a third mod: it logs the skip and leaves that service
+  untouched. Sort the other mod out first.
+
 ## Status & roadmap
 
 - [x] Static analysis of VIETMAP LIVE (Android: `updateTrip(Trip)` confirmed;
