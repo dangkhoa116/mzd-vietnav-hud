@@ -382,15 +382,30 @@ def launcher_tests():
           "payload vietnav" in c.stublog() and "jci-dialog" not in c.stublog(), c.stublog())
 
     c = Car()
-    kits(c, ["tpms", "vietnav"])
-    c.seq(1)
+    kits(c, ["vietnav", "other"])
+    c.seq(1, 0)
     c.run("usb/install-patches.sh")
-    check("launcher: two kits, 2nd button runs the 2nd", "payload vietnav" in c.stublog(), c.stublog())
+    check("launcher: two kits (one not standard), 2nd button runs the 2nd",
+          "payload other" in c.stublog(), c.stublog())
     c.write("stub.log", b"")
     c.seq(2)
     before = c.tree()
     c.run("usb/install-patches.sh")
     check("launcher: HUY runs nothing", "payload" not in c.stublog() and c.tree() == before, c.stublog())
+
+    # two of the three standard kits: fixed three-button face, the missing
+    # kit is reported on screen, not hidden
+    c = Car()
+    kits(c, ["tpms", "vietnav"])
+    c.seq(1, 9, 9)
+    c.run("usb/install-patches.sh")
+    check("launcher: missing standard kit is reported, not run",
+          "KHONG CO tren dia" in c.stublog() and "payload" not in c.stublog(), c.stublog())
+    c.write("stub.log", b"")
+    c.seq(1, 7, 0)
+    c.run("usb/install-patches.sh")
+    check("launcher: after the report it is back at the chooser",
+          "KHONG CO tren dia" in c.stublog() and "payload tpms" in c.stublog(), c.stublog())
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav"])
@@ -404,7 +419,7 @@ def launcher_tests():
     check("launcher: CARPLAY (foreign) asks BAT DAU first, then runs",
           "payload wcp" in c.stublog(), c.stublog())
     c.write("stub.log", b"")
-    c.seq(1, 1)
+    c.seq(1, 1, 9)
     c.run("usb/install-patches.sh")
     check("launcher: CARPLAY confirm HUY runs nothing",
           "payload" not in c.stublog(), c.stublog())

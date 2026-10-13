@@ -119,13 +119,17 @@ nhau, không kit nào làm hỏng phần của kit khác.
 
 - **Một dia, ba kit.** `install-patches.sh` là launcher dùng chung với kit TPMS
   (cùng một file, có dòng phiên bản `mzd-touch-launcher`). Nó tìm các payload
-  `*-touch.sh` trên dia rồi hỏi chạy kit nào. jci-dialog tối đa 3 nút, nên khi
-  có 3 kit màn chọn hiện đủ cả ba và nút huỷ nằm sâu hơn một màn: menu của mỗi
-  kit đều mở ra có sẵn HUY (payload kit CarPlay không viết cho launcher này
-  nên được hỏi BAT DAU / HUY trước), và sau khi một kit chạy xong, LAM TIEP /
-  XONG hỏi có chọn kit nữa không. Kit thứ tư mới cần màn sau (TIEP).
-  `build-kit.py` của mỗi kit giữ nguyên payload của kit khác, giữ launcher của
-  kit CarPlay thành `wcp-touch.sh`, và không thay launcher dùng chung bản mới hơn.
+  `*-touch.sh` trên dia rồi hỏi chạy kit nào. jci-dialog tối đa 3 nút, nên màn
+  chọn luôn hiện 3 nút chuẩn TPMS / CARPLAY / VIETNAV ở đúng vị trí mỗi khi
+  dia có ít nhất 2 trong 3 kit; kit nào không có trên dia không bị giấu đi:
+  nút vẫn hiện, bấm vào sẽ báo ngay trên màn rồi quay lại màn chọn. Nút huỷ
+  nằm sâu hơn một màn: menu của mỗi kit mở ra có sẵn HUY (payload kit CarPlay
+  không viết cho launcher này nên được hỏi BAT DAU / HUY trước), và sau khi
+  một kit chạy xong, LAM TIEP / XONG hỏi có chọn kit nữa không. Dia lạ hơn
+  (chỉ 1 kit chuẩn, hoặc có kit thứ tư) dùng màn chọn dựng từ những gì thật
+  sự có mặt, nằm sau TIEP. `build-kit.py` của mỗi kit giữ nguyên payload của
+  kit khác, giữ launcher của kit CarPlay thành `wcp-touch.sh`, và không thay
+  launcher dùng chung bản mới hơn.
 - **Cả hai file sm.** Gate CarPlay boot `sm_WCP.conf`, nhưng hết lượt chạy thử
   hoặc rollback thì xe boot lại `sm.conf`; dòng của kit này có ở cả hai nên HUD
   vẫn chạy.
