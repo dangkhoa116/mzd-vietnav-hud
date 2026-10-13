@@ -165,7 +165,7 @@ undoes another's.
 - [x] Touch install kit for VN firmware (74.00.331): AA mod + CarPlay bridge on
       one TouchTune stick, with rollback and a diagnostics collect mode; the
       shared launcher coexists with the TPMS and wireless-CarPlay kits
-- [x] Host checks: 67 checks against a fake CMU, including the install/rollback
+- [x] Host checks: 75 checks against a fake CMU, including the install/rollback
       round trip on the car's own sm configs and every dialog checked against
       what the car's jci-dialog binary really shows
 - [ ] On-car session: THU THAP (collect) first, then AA, then CarPlay — confirm
