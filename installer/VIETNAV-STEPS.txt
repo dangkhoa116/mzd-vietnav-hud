@@ -47,8 +47,10 @@ LOGS
 
 ONE STICK, SEVERAL KITS
   * The stick may also carry the TPMS and wireless-CarPlay kits. Tapping
-    INSTALL first asks which kit (TPMS / CARPLAY / VIETNAV; a third kit is
-    behind TIEP). Each kit only touches its own files.
+    INSTALL asks which kit - with three kits all three are on one screen;
+    the cancel is the HUY inside each kit's menu (the CarPlay kit asks
+    BAT DAU / HUY first), and after a kit finishes LAM TIEP / XONG asks
+    whether to pick another. Each kit only touches its own files.
   * After the wireless-CarPlay kit's GO BO (rollback), this menu may say
     "chua cai" again: tap CAI DAT to put the HUD lines back.
 

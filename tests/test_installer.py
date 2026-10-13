@@ -394,21 +394,37 @@ def launcher_tests():
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav"])
-    c.seq(2, 0)
+    c.seq(2)
     c.run("usb/install-patches.sh")
-    check("launcher: three kits, TIEP then the 3rd", "payload vietnav" in c.stublog(), c.stublog())
+    check("launcher: three kits, the 3rd is on the one screen",
+          "payload vietnav" in c.stublog(), c.stublog())
     c.write("stub.log", b"")
-    c.seq(1)
+    c.seq(1, 0)
     c.run("usb/install-patches.sh")
-    check("launcher: three kits, CARPLAY on the first screen", "payload wcp" in c.stublog(), c.stublog())
+    check("launcher: CARPLAY (foreign) asks BAT DAU first, then runs",
+          "payload wcp" in c.stublog(), c.stublog())
     c.write("stub.log", b"")
+    c.seq(1, 1)
+    c.run("usb/install-patches.sh")
+    check("launcher: CARPLAY confirm HUY runs nothing",
+          "payload" not in c.stublog(), c.stublog())
+    c.write("stub.log", b"")
+    c.seq(2, 0, 0, 1)
+    c.run("usb/install-patches.sh")
+    check("launcher: LAM TIEP reopens the chooser, XONG leaves",
+          "payload vietnav" in c.stublog() and "payload tpms" in c.stublog(), c.stublog())
+
+    c = Car()
+    kits(c, ["tpms", "wcp", "vietnav", "other"])
     c.seq(2, 1, 0)
     c.run("usb/install-patches.sh")
-    check("launcher: VE LAI goes back to the first screen", "payload tpms" in c.stublog(), c.stublog())
+    check("launcher: four kits, TIEP then the 4th (confirm BAT DAU)",
+          "payload other" in c.stublog(), c.stublog())
     c.write("stub.log", b"")
     c.seq(2, 2)
     c.run("usb/install-patches.sh")
-    check("launcher: HUY on the second screen runs nothing", "payload" not in c.stublog(), c.stublog())
+    check("launcher: HUY on the second screen runs nothing",
+          "payload" not in c.stublog(), c.stublog())
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav"])

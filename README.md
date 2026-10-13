@@ -124,10 +124,14 @@ undoes another's.
 
 - **One stick, three kits.** `install-patches.sh` is a launcher shared with the
   TPMS kit (same file, `mzd-touch-launcher` version line). It finds the
-  `*-touch.sh` payloads on the stick and asks which one (a third kit is on a
-  second screen). Each kit's `build-kit.py` keeps the other kits' payloads,
-  keeps the CarPlay kit's launcher as `wcp-touch.sh`, and never replaces a
-  newer shared launcher.
+  `*-touch.sh` payloads on the stick and asks which one. jci-dialog has three
+  buttons at most, so with three kits the chooser shows all three and the
+  cancel lives one screen deeper: every kit's own menu opens with HUY (the
+  CarPlay kit's payload, not written for this launcher, gets a BAT DAU / HUY
+  confirm first), and after a kit finishes, LAM TIEP / XONG asks whether to
+  pick another kit. A fourth kit pages behind TIEP. Each kit's `build-kit.py`
+  keeps the other kits' payloads, keeps the CarPlay kit's launcher as
+  `wcp-touch.sh`, and never replaces a newer shared launcher.
 - **Both sm configs.** The CarPlay gate boots `sm_WCP.conf`, but a trial that
   runs out, or its rollback, boots `sm.conf` again; this kit's lines are in
   both, so the HUD keeps working either way.

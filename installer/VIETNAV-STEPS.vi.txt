@@ -46,7 +46,9 @@ LOG
 
 MOT DIA, NHIEU KIT
   * Dia co the mang ca kit TPMS va kit CarPlay khong day. Bam INSTALL se
-    hoi chon kit truoc (TPMS / CARPLAY / VIETNAV; kit thu ba nam sau TIEP).
+    hoi chon kit - co 3 kit thi ca ba cung mot man hinh; nut huy la HUY
+    trong menu cua tung kit (kit CarPlay hoi BAT DAU / HUY truoc), va sau
+    khi mot kit chay xong, LAM TIEP / XONG hoi co chon kit nua khong.
     Moi kit chi dung vao file cua no.
   * Sau khi GO BO (rollback) kit CarPlay khong day, menu nay co the bao
     "chua cai" lai: bam CAI DAT de dua dong HUD tro lai.
