@@ -2,7 +2,7 @@
 # install-patches.sh - the shared touch launcher for this stick.
 # Copyright (c) 2026 Dang Khoa (dangkhoa116). MIT License.
 # SPDX-License-Identifier: MIT
-# mzd-touch-launcher: 4
+# mzd-touch-launcher: 5
 #
 # TouchTune's update trigger (github.com/Miatafy/TouchTune, GPL-3.0, by
 # Miatafy) runs a file of this name from the stick root, as root, when
@@ -19,7 +19,8 @@
 # One payload: straight to it. More: jci-dialog asks - and jci-dialog has
 # three buttons at most. When the stick carries at least two of the three
 # standard kits, the chooser always shows all three buttons in the same
-# places; a kit whose payload is not on the stick is not hidden - tapping
+# places, over a line per kit saying whether it is installed on the car
+# (read only); a kit whose payload is not on the stick is not hidden - tapping
 # its button says so on screen and comes back to the chooser. The cancel
 # lives one screen deeper: every kit's own menu opens with a HUY (a
 # foreign payload gets a BAT DAU / HUY confirm first). After TPMS or
@@ -60,11 +61,43 @@ label() {
         *)       echo "KHAC" ;;
     esac
 }
+
+# state <kit>: what is on the car now, read only, by the same marks each
+# kit checks for itself
+state() {
+    case "$1" in
+        tpms)
+            if grep -q "TPMS bds wrapper, production" /jci/bds/bds 2>/dev/null; then
+                if [ -f /data_persist/tpms/bds-off ]; then echo "DA CAI, DANG TAT / off"
+                else echo "DA CAI / installed"; fi
+            elif grep -q "tpms-v3 trial wrapper" /jci/bds/bds 2>/dev/null; then
+                echo "BAN THU / trial armed"
+            else
+                echo "CHUA CAI / not installed"
+            fi ;;
+        wcp)
+            if grep -q "wcp-gate.sh" /jci/scripts/get_board_type.sh 2>/dev/null; then
+                case "`cat /data_persist/wcp-trial 2>/dev/null`" in
+                    999999) echo "DA CAI / installed" ;;
+                    "")     echo "TAT / off" ;;
+                    *)      echo "CHAY THU / trial" ;;
+                esac
+            else
+                echo "CHUA CAI / not installed"
+            fi ;;
+        vietnav)
+            s=""
+            grep -q "data_persist/oem-aa-mod/libpatch" /jci/sm/sm.conf /jci/sm/sm_WCP.conf 2>/dev/null && s="AA"
+            grep -q "data_persist/cp-hud-mod/libpatch" /jci/sm/sm.conf /jci/sm/sm_WCP.conf 2>/dev/null \
+                && s="${s}${s:+ + }CARPLAY"
+            if [ -n "$s" ]; then echo "DA CAI $s / installed"; else echo "CHUA CAI / not installed"; fi ;;
+    esac
+}
 desc() {
     case "$1" in
-        tpms)    echo "TPMS = ap suat lop / tyre pressure" ;;
-        wcp)     echo "CARPLAY = CarPlay khong day / wireless CarPlay" ;;
-        vietnav) echo "VIETNAV = dan duong len HUD / HUD navigation" ;;
+        tpms)    echo "TPMS (ap suat lop): `state tpms`" ;;
+        wcp)     echo "CARPLAY (khong day): `state wcp`" ;;
+        vietnav) echo "VIETNAV (HUD): `state vietnav`" ;;
         *)       echo "KHAC = bo cai khac / another kit" ;;
     esac
 }
@@ -80,21 +113,25 @@ if [ "$NS" -ge 2 ] && [ "$N" = "$NS" ]; then
     FIXED=1
 fi
 
-# the legend lists the standard kits; a missing one says so
-TEXT=""
-for k in tpms wcp vietnav; do
-    if have "$k"; then
-        TEXT="$TEXT`desc \"$k\"`\\n"
-    elif [ "$FIXED" = 1 ]; then
-        TEXT="$TEXT`label \"$k\"` - KHONG CO tren USB / not on this stick\\n"
-    fi
-done
-i=1
-while [ "$i" -le "$N" ]; do
-    eval "k=\$K$i"
-    [ "$k" = other ] && TEXT="${TEXT}KHAC = bo cai khac / another kit\\n"
-    i=$((i + 1))
-done
+# legend: each standard kit with its state on the car; a kit that is not
+# on the stick says so instead. Built again for every round of the
+# chooser, so after LAM TIEP it shows what the last kit changed.
+legend() {
+    TEXT=""
+    for k in tpms wcp vietnav; do
+        if have "$k"; then
+            TEXT="$TEXT`desc \"$k\"`\\n"
+        elif [ "$FIXED" = 1 ]; then
+            TEXT="$TEXT`label \"$k\"` - KHONG CO tren USB / not on this stick\\n"
+        fi
+    done
+    i=1
+    while [ "$i" -le "$N" ]; do
+        eval "k=\$K$i"
+        [ "$k" = other ] && TEXT="${TEXT}KHAC = bo cai khac / another kit\\n"
+        i=$((i + 1))
+    done
+}
 
 # jci-dialog is the car's own (/jci/tools): a 680x354 box, buttons left to
 # right ok=0, cancel=1, button3=2. --text is split at each literal \n into
@@ -170,6 +207,7 @@ while :; do
     # run kits over and over.
     ROUND=$((ROUND + 1))
     [ "$ROUND" -le 6 ] || exit 0
+    legend
     if [ "$FIXED" = 1 ]; then
         # the standard face: same three buttons, whether or not all three
         # kits are on the stick; cancel is inside each kit's own menu

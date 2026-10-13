@@ -121,7 +121,9 @@ nhau, không kit nào làm hỏng phần của kit khác.
   (cùng một file, có dòng phiên bản `mzd-touch-launcher`). Nó tìm các payload
   `*-touch.sh` trên dia rồi hỏi chạy kit nào. jci-dialog tối đa 3 nút, nên màn
   chọn luôn hiện 3 nút chuẩn TPMS / CARPLAY / VIETNAV ở đúng vị trí mỗi khi
-  dia có ít nhất 2 trong 3 kit; kit nào không có trên dia không bị giấu đi:
+  dia có ít nhất 2 trong 3 kit, kèm mỗi kit một dòng báo đã cài trên xe hay
+  chưa (DA CAI / CHUA CAI, chạy thử hay đang tắt; chỉ đọc, đọc lại mỗi lần
+  màn chọn hiện lại). Kit nào không có trên dia không bị giấu đi:
   nút vẫn hiện, bấm vào sẽ báo ngay trên màn rồi quay lại màn chọn. Nút huỷ
   nằm sâu hơn một màn: menu của mỗi kit mở ra có sẵn HUY (payload kit CarPlay
   không viết cho launcher này nên được hỏi BAT DAU / HUY trước), và sau khi
@@ -137,7 +139,7 @@ nhau, không kit nào làm hỏng phần của kit khác.
   vẫn chạy.
 - **Sau khi rollback kit CarPlay** (`wcp-rollback.sh` / `GO BO` trong menu của
   nó) hai file sm trở về backup của kit đó, nên dòng của kit này có thể mất: menu
-  VIETNAV sẽ báo *chua cai*, bấm `CAI DAT` là có lại.
+  VIETNAV sẽ báo *CHUA CAI*, bấm `CAI DAT` là có lại.
 - **reset_board.** Rollback của kit này chỉ trả `reset_board="yes"` ở chỗ lúc
   cài đã ghi lại là có đổi trong `sm.conf`. `reset_board` của `sm_WCP.conf` là
   chốt chống boot-loop của kit CarPlay, để nguyên.

@@ -8,7 +8,8 @@
 # all kits on the stick) hands over to this.
 #
 # WHAT IT DOES
-#   Menu (3 buttons, Vietnamese):
+#   Menu (3 buttons; screens in Vietnamese / English, with the status
+#   and the dangkhoa116 credit):
 #     CAI DAT  -> which target? AA / CARPLAY / CA HAI (what the payload has)
 #     GO BO    -> (when installed) removes the installed target(s)
 #     THU THAP -> vietnav-collect.sh (read-only diagnostics pack)
@@ -69,31 +70,47 @@ have_aa() { [ -f "$HERE/vietnav-payload/libpatch-blmjciaapa.so" ] && [ -f "$HERE
 have_cp() { [ -f "$HERE/vietnav-payload/libpatch-blmjcicarplay.so" ]; }
 
 # --- the menu --------------------------------------------------------------------
+# Every screen: Vietnamese / English, at most 5 lines of ~50 characters
+# (jci-dialog shows no more), the credit on the last line where it fits.
+CREDIT="- by dangkhoa116 -"
+tname() {        # aa | cp | all -> what the screen says
+    case "$1" in
+        aa)  echo "AA" ;;
+        cp)  echo "CARPLAY" ;;
+        *)   echo "AA + CARPLAY" ;;
+    esac
+}
+
 INST=""; aa_installed && INST="aa"; cp_installed && INST="${INST}${INST:+ }cp"
 log "installed: ${INST:-none}"
 
+case "$INST" in
+    "aa cp") ST="DA CAI AA + CARPLAY / installed" ;;
+    aa)      ST="DA CAI AA / installed" ;;
+    cp)      ST="DA CAI CARPLAY / installed" ;;
+    *)       ST="CHUA CAI / not installed" ;;
+esac
 if [ -n "$INST" ]; then
-    TITLE="DA CAI: ${INST}"
-    OK="GO BO"
+    OK="GO BO"; DO="GO BO = remove"
 else
-    TITLE="VIETNAV HUD - chua cai"
-    OK="CAI DAT"
+    OK="CAI DAT"; DO="CAI DAT = install"
 fi
 
-ask3 "VIETNAV HUD" "$TITLE" "$OK" "THU THAP" "HUY"
+ask3 "VIETNAV HUD" "Trang thai / Status:\n$ST\n$DO   THU THAP = collect logs\nHUY = cancel\n$CREDIT" \
+    "$OK" "THU THAP" "HUY"
 choice=$?
 log "choice: $choice"
 
 if [ "$choice" = "1" ]; then          # THU THAP
-    popup "Dang thu thap... Dung rut USB.\nCollecting... do not remove the USB."
+    popup "Dang thu thap... Dung rut USB.\nCollecting logs... do not remove the USB."
     if sh "$HERE/vietnav-collect.sh" > /tmp/vietnav-collect.out 2>&1; then
         cat /tmp/vietnav-collect.out
         # just the file name: a dialog line holds ~50 characters
         F=$(sed -n 's#.*collected: .*/\([^ /]*\) .*#\1#p' /tmp/vietnav-collect.out | tail -n 1)
-        say "THU THAP XONG\n\nDa luu tren USB:\n${F:-vietnav-collect-*.tgz}"
+        say "THU THAP XONG / LOGS COLLECTED\n\nDa luu tren USB / saved on the USB:\n${F:-vietnav-collect-*.tgz}\n$CREDIT"
     else
         cat /tmp/vietnav-collect.out
-        say "THU THAP LOI\n\nMang USB ve, xem vietnav-touch.log"
+        say "THU THAP LOI / COLLECT FAILED\n\nMang USB ve, xem / bring the USB home, see:\nvietnav-touch.log"
     fi
     exit 0
 fi
@@ -103,7 +120,8 @@ fi
 if [ -z "$INST" ]; then
     # pick a target
     if have_aa && have_cp; then
-        ask3 "CAI NAO?" "AA = Android Auto\nCARPLAY = iPhone\nCA HAI = ca hai" "AA" "CARPLAY" "CA HAI"
+        ask3 "CAI NAO? / WHICH ONE?" "AA = Android Auto\nCARPLAY = iPhone (CarPlay)\nCA HAI = ca hai / both\n\n$CREDIT" \
+            "AA" "CARPLAY" "CA HAI"
         t=$?
         case "$t" in
             0) T=aa ;;
@@ -114,15 +132,15 @@ if [ -z "$INST" ]; then
     elif have_aa; then T=aa
     elif have_cp; then T=cp
     else
-        say "KHONG CO PAYLOAD\n\nvietnav-payload/ thieu file .so.\nXay lai dia: build-kit.py\n(Che do THU THAP van dung duoc.)"
+        say "KHONG CO PAYLOAD / NO PAYLOAD\n\nThieu file .so / missing .so files\nXay lai USB / rebuild the stick: build-kit.py\nTHU THAP van dung duoc / logs still work"
         exit 0
     fi
     log "install: $T"
-    popup "Dang cai dat ($T)... Dung rut USB.\nInstalling ($T)... do not remove the USB."
+    popup "Dang cai dat `tname $T`... Dung rut USB.\nInstalling `tname $T`... do not remove the USB."
     if sh "$HERE/vietnav-install.sh" "$T" --yes; then
-        say "DA CAI ($T)\n\nAA: cam Android + mo dan duong.\nCARPLAY: ket noi iPhone + mo dan duong.\nLog: vietnav-install.log tren USB"
+        say "DA CAI / INSTALLED: `tname $T`\nMo dan duong tren dien thoai, xem tren HUD.\nStart navigation on the phone, see the HUD.\nLog: vietnav-install.log\n$CREDIT"
     else
-        say "CAI DAT LOI\n\nMang USB ve, xem vietnav-install.log"
+        say "CAI DAT LOI / INSTALL FAILED\n\nMang USB ve, xem / bring the USB home, see:\nvietnav-install.log"
     fi
 else
     # rollback: which target
@@ -132,11 +150,11 @@ else
         cp) T=cp ;;
     esac
     log "rollback: $T"
-    popup "Dang go ($T)... Dung rut USB.\nRemoving ($T)... do not remove the USB."
+    popup "Dang go `tname $T`... Dung rut USB.\nRemoving `tname $T`... do not remove the USB."
     if sh "$HERE/vietnav-rollback.sh" "$T"; then
-        say "DA GO BO ($T)\n\nLog: vietnav-rollback.log tren USB"
+        say "DA GO BO / REMOVED: `tname $T`\n\nLog: vietnav-rollback.log\n\n$CREDIT"
     else
-        say "GO BO LOI\n\nMang USB ve, xem vietnav-rollback.log"
+        say "GO BO LOI / REMOVE FAILED\n\nMang USB ve, xem / bring the USB home, see:\nvietnav-rollback.log"
     fi
 fi
 exit 0

@@ -348,7 +348,8 @@ def install_tests():
     c.seq(2)
     c.run("usb/install-patches.sh")
     check("after a CarPlay-kit rollback the menu says not installed",
-          "chua cai" in c.stublog(), c.stublog())
+          "--title=VIETNAV HUD --text=Trang thai / Status:" in c.stublog()
+          and "CHUA CAI / not installed" in c.stublog(), c.stublog())
     rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
     check("...and installing again puts the lines back",
           rc == 0 and under(c.conf("sm.conf"), "jciAAPA", [car_line(AA_L1, c.t)]), out)
@@ -458,6 +459,64 @@ def launcher_tests():
     check("launcher: LAM TIEP reopens the chooser, XONG leaves",
           "payload vietnav" in c.stublog() and "payload tpms" in c.stublog(), c.stublog())
 
+    # the chooser says what each kit has on the car
+    def chooser(c):
+        c.write("stub.log", b"")
+        c.seq(9)
+        c.run("usb/install-patches.sh")
+        return next((l for l in c.stublog().splitlines() if "--3-button-dialog" in l), "")
+
+    c = Car()
+    kits(c, ["tpms", "wcp", "vietnav"])
+    face = chooser(c)
+    check("launcher: chooser shows each kit's state (fixture car)",
+          "TPMS (ap suat lop): DA CAI / installed" in face
+          and "CARPLAY (khong day): DA CAI / installed" in face
+          and "VIETNAV (HUD): CHUA CAI / not installed" in face, face)
+    rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+    face = chooser(c)
+    check("launcher: VIETNAV shows DA CAI AA + CARPLAY after an install",
+          rc == 0 and "VIETNAV (HUD): DA CAI AA + CARPLAY / installed" in face, face)
+    c.run("usb/vietnav-rollback.sh", "cp")
+    face = chooser(c)
+    check("launcher: ... and DA CAI AA after the CarPlay part is removed",
+          "VIETNAV (HUD): DA CAI AA / installed" in face, face)
+
+    # after LAM TIEP the chooser reads the car again
+    c = Car()
+    kits(c, ["tpms", "wcp", "vietnav"])
+    c.write("usb/vietnav-touch.sh", ('#!/bin/sh\necho "payload vietnav" >> "%s/stub.log"\n'
+                                     'echo "data_persist/oem-aa-mod/libpatch" >> "%s/jci/sm/sm.conf"\n'
+                                     % (c.t, c.t)).encode())
+    c.seq(2, 0, 9)
+    c.run("usb/install-patches.sh")
+    faces = [l for l in c.stublog().splitlines() if "--3-button-dialog" in l]
+    check("launcher: after LAM TIEP the chooser shows the new state",
+          len(faces) == 2 and "VIETNAV (HUD): CHUA CAI" in faces[0]
+          and "VIETNAV (HUD): DA CAI AA / installed" in faces[1], c.stublog())
+
+    c = Car()
+    kits(c, ["tpms", "wcp", "vietnav"])
+    c.write("jci/bds/bds", b"#!/bin/sh\n# tpms-v3 trial wrapper\n")
+    c.write("data_persist/wcp-trial", b"1\n")
+    face = chooser(c)
+    check("launcher: trial states (TPMS trial, CarPlay trial)",
+          "TPMS (ap suat lop): BAN THU / trial armed" in face
+          and "CARPLAY (khong day): CHAY THU / trial" in face, face)
+    c.write("jci/bds/bds", TPMS_BDS)
+    c.write("data_persist/tpms/bds-off", b"3 bad starts\n")
+    os.remove(os.path.join(c.t, "data_persist/wcp-trial"))
+    face = chooser(c)
+    check("launcher: switched-off states (TPMS bds-off, CarPlay no trial left)",
+          "TPMS (ap suat lop): DA CAI, DANG TAT / off" in face
+          and "CARPLAY (khong day): TAT / off" in face, face)
+    c.write("jci/bds/bds", b"\x7fELF stock bds")
+    c.write("jci/scripts/get_board_type.sh", b"#!/bin/sh\nexit 0\n")
+    face = chooser(c)
+    check("launcher: stock car says CHUA CAI for TPMS and CarPlay",
+          "TPMS (ap suat lop): CHUA CAI / not installed" in face
+          and "CARPLAY (khong day): CHUA CAI / not installed" in face, face)
+
     # the CarPlay kit restarts the unit: after it, no LAM TIEP
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav"])
@@ -522,7 +581,16 @@ def touch_tests():
           under(c.conf("sm_WCP.conf"), "jciCARPLAY", [car_line(CP_L1, c.t), car_line(CP_L2, c.t)]),
           out + tlog)
     check("touch: log on the stick", "install: all" in tlog, tlog)
-    check("touch: says done", "DA CAI (all)" in c.stublog(), c.stublog())
+    check("touch: says done, both languages, with the credit",
+          "DA CAI / INSTALLED: AA + CARPLAY" in c.stublog()
+          and "Start navigation on the phone" in c.stublog()
+          and "- by dangkhoa116 -" in c.stublog(), c.stublog())
+    c.write("stub.log", b"")
+    c.seq(9)
+    c.run("usb/install-patches.sh")
+    check("touch: menu shows the status and the credit once installed",
+          "DA CAI AA + CARPLAY / installed" in c.stublog()
+          and "GO BO = remove" in c.stublog() and "- by dangkhoa116 -" in c.stublog(), c.stublog())
     c.seq(0)                          # GO BO
     c.run("usb/install-patches.sh")
     check("touch: GO BO puts sm.conf back", c.read("jci/sm/sm.conf") == sm0, c.stublog())

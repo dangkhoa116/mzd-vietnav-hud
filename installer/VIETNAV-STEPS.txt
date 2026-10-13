@@ -11,7 +11,8 @@ WHAT YOU NEED
 INSTALL (touch, no keyboard)
   1. Ignition ON (engine running or ACC), radio fully booted.
   2. Insert the stick. The update dialog appears after a few seconds.
-  3. Tap INSTALL. The VIETNAV HUD menu appears:
+  3. Tap INSTALL. The VIETNAV HUD menu appears (status on top, Vietnamese
+     and English):
        CAI DAT   -> pick a target: AA / CARPLAY / CA HAI (both)
        THU THAP  -> writes vietnav-collect-<date>.tgz to the stick
        GO BO     -> (when installed) removes what is installed
@@ -49,14 +50,16 @@ ONE STICK, SEVERAL KITS
   * The stick may also carry the TPMS and wireless-CarPlay kits. Tapping
     INSTALL asks which kit - the chooser shows the three standard buttons
     (TPMS / CARPLAY / VIETNAV) whenever at least two of them are on the
-    stick; a kit that is not on the stick keeps its button and tapping it
-    says so on screen. The cancel is the HUY inside each kit's menu (the
-    CarPlay kit asks BAT DAU / HUY first). After TPMS or VIETNAV, tap
-    its last message away and LAM TIEP / XONG asks whether to pick
-    another; the CarPlay kit restarts the unit, so it is the last one.
+    stick, with a line per kit saying whether it is installed on the car
+    (DA CAI / CHUA CAI); a kit that is not on the stick keeps its button
+    and tapping it says so on screen. The cancel is the HUY inside each
+    kit's menu (the CarPlay kit asks BAT DAU / HUY first). After TPMS or
+    VIETNAV, tap its last message away and LAM TIEP / XONG asks whether
+    to pick another; the CarPlay kit restarts the unit, so it is the last
+    one.
     Each kit only touches its own files.
   * After the wireless-CarPlay kit's GO BO (rollback), this menu may say
-    "chua cai" again: tap CAI DAT to put the HUD lines back.
+    "CHUA CAI" again: tap CAI DAT to put the HUD lines back.
 
 NOTES
   * Installing on a unit whose jciCARPLAY/jciAAPA/aap_service block already

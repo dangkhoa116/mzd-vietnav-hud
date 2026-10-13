@@ -127,9 +127,11 @@ undoes another's.
   `*-touch.sh` payloads on the stick and asks which one. jci-dialog has three
   buttons at most, so the chooser shows the three standard kits - TPMS,
   CARPLAY, VIETNAV - in the same places whenever at least two of them are on
-  the stick; a kit that is not on the stick is not hidden: its button stays
-  and tapping it says so on screen, then the chooser comes back. The cancel
-  lives one screen deeper: every kit's own menu opens with HUY (the CarPlay
+  the stick, over one line per kit saying whether it is installed on the car
+  (DA CAI / CHUA CAI, trial or switched off; read only, refreshed every time
+  the chooser comes back). A kit that is not on the stick is not hidden: its
+  button stays and tapping it says so on screen, then the chooser comes back.
+  The cancel lives one screen deeper: every kit's own menu opens with HUY (the CarPlay
   kit's payload, not written for this launcher, gets a BAT DAU / HUY confirm
   first). After TPMS or VIETNAV finishes and its last message is tapped
   away, LAM TIEP / XONG asks whether to pick another kit; the CarPlay kit
@@ -144,7 +146,7 @@ undoes another's.
   both, so the HUD keeps working either way.
 - **After the CarPlay kit's rollback** (`wcp-rollback.sh` / `GO BO` in its
   menu) both sm files are back to that kit's backups, so this kit's lines may
-  be gone: the VIETNAV menu then says *chua cai* again, and `CAI DAT` puts them
+  be gone: the VIETNAV menu then says *CHUA CAI* again, and `CAI DAT` puts them
   back.
 - **reset_board.** This rollback puts `reset_board="yes"` back only where the
   install recorded changing it in `sm.conf`. `sm_WCP.conf`'s `reset_board` is

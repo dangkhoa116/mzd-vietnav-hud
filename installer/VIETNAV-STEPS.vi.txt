@@ -11,7 +11,8 @@ CAN CHUAN BI
 CAI DAT (bam cam ung, khong can ban phim)
   1. Bat dien (ACC / may chay), cho radio khoi dong day du.
   2. Cam dia USB. May hoi cap nhat sau vai giay.
-  3. Bam CAI DAT. Menu VIETNAV HUD hien len:
+  3. Bam CAI DAT. Menu VIETNAV HUD hien len (trang thai o tren, song ngu
+     Viet / Anh):
        CAI DAT   -> chon: AA / CARPLAY / CA HAI (ca hai)
        THU THAP  -> ghi vietnav-collect-<ngay>.tgz ra dia USB
        GO BO     -> (khi da cai) go bo phan da cai
@@ -47,7 +48,8 @@ LOG
 MOT DIA, NHIEU KIT
   * Dia co the mang ca kit TPMS va kit CarPlay khong day. Bam INSTALL se
     hoi chon kit - man chon luon hien 3 nut chuan (TPMS / CARPLAY /
-    VIETNAV) moi khi dia co it nhat 2 trong 3 kit; kit nao khong co tren
+    VIETNAV) moi khi dia co it nhat 2 trong 3 kit, moi kit co mot dong
+    bao da cai tren xe hay chua (DA CAI / CHUA CAI); kit nao khong co tren
     dia van con nut, bam vao se bao ngay tren man hinh roi quay lai man
     chon. Nut huy la HUY trong menu cua tung kit (kit CarPlay hoi
     BAT DAU / HUY truoc). Sau TPMS hoac VIETNAV, bam dong thong bao
@@ -55,7 +57,7 @@ MOT DIA, NHIEU KIT
     khoi dong lai may nen phai chay sau cung. Moi kit chi dung vao file
     cua no.
   * Sau khi GO BO (rollback) kit CarPlay khong day, menu nay co the bao
-    "chua cai" lai: bam CAI DAT de dua dong HUD tro lai.
+    "CHUA CAI" lai: bam CAI DAT de dua dong HUD tro lai.
 
 LUU Y
   * Neu block jciCARPLAY/jciAAPA/aap_service da co environ_var cua mod khac:
