@@ -50,21 +50,28 @@ tests/
 ## Cài qua cảm ứng (TouchTune USB)
 
 Bộ installer dùng đúng cơ chế TouchTune USB như các kit khác trên xe này: cắm
-dia → bấm INSTALL trên hộp thoại cập nhật → menu tiếng Việt hiện ra
-(`CAI DAT` cài / `THU THAP` thu thập dữ liệu / `GO BO` gỡ). Không cần bàn phím.
+dia → bấm INSTALL trên hộp thoại cập nhật → menu tiếng Việt. Không cần bàn
+phím. Kit mang **sẵn cả hai mod**:
+
+- **AA** — binary bản release 0.10.0 của oem-aa-mod (Android Auto → HUD, GAL 1.6)
+- **CARPLAY** — bridge mazda-carplay-hud (bản ilshyma: fix km/h + fold tiếng Việt)
+
+Menu: `CAI DAT` → chọn **AA / CARPLAY / CA HAI** · `THU THAP` → gói chẩn đoán
+ra dia · `GO BO` → gỡ phần đã cài. Nguồn gốc + md5 từng binary nằm trong
+`vietnav-payload/PAYLOAD-SOURCES.md`.
 
 ```
-# payload: trỏ VIETNAV_AA_MOD tới bản oem-aa-mod đã build có
-# mazda/build/release/ (áp patches/oem-aa-mod/*.patch trước, build theo
-# docs/build.md của dự án đó); thiếu file .so thì dia vẫn build được và chỉ
-# chạy chế độ THU THẬP.
 python installer/build-kit.py E:\        # hoặc bỏ đối số -> installer/dist/
 ```
 
-`build-kit.py` copy file kích hoạt TouchTune từ thư mục all-in-one
-CarPlay-không-dây sang dia nếu dia chưa có (ghi đè bằng `VIETNAV_TOUCHTUNE`);
-nhóm file đó thuộc bản quyền GPL-3.0 của Miatafy nên không commit vào repo.
-Các bước trên xe: [installer/VIETNAV-STEPS.vi.txt](installer/VIETNAV-STEPS.vi.txt)
+`build-kit.py` lấy binary oem-aa-mod từ bản release upstream
+(`VIETNAV_AA_MOD_RELEASE`) hoặc từ source build (`VIETNAV_AA_MOD` — đã áp
+`patches/oem-aa-mod/*.patch`, cần nếu muốn fix tên đường dài trong binary
+ship), và bridge CarPlay qua `VIETNAV_CP_HUD`. Nhóm file kích hoạt TouchTune
+được copy từ thư mục all-in-one CarPlay-không-dây nếu dia chưa có (đổi bằng
+`VIETNAV_TOUCHTUNE`); file đó thuộc GPL-3.0 của Miatafy nên không commit vào
+repo. Mod nào thiếu binary sẽ không xuất hiện trong menu. Các bước trên xe:
+[installer/VIETNAV-STEPS.vi.txt](installer/VIETNAV-STEPS.vi.txt)
 ([English](installer/VIETNAV-STEPS.txt)).
 
 ## Bản vá: tên đường Việt Nam dài trên HUD

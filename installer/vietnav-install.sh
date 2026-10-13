@@ -1,115 +1,185 @@
 #!/bin/sh
-# vietnav-install.sh - install the patched oem-aa-mod for Vietnamese cars.
+# vietnav-install.sh [aa|cp|all] - install the HUD navigation mods.
 # Copyright (c) 2026 dangkhoa116. AGPL-3.0 (see repo LICENSE).
 #
-# Runs as root (from the TouchTune touch UI, or a terminal). Does what
-# oem-aa-mod's docs/installation.md describes, nothing more:
+# Runs as root (from the TouchTune touch UI, or a terminal).
 #
-#   1. copies libpatch-*.so + libpatch.conf to /data_persist/oem-aa-mod/
-#   2. adds an <environ_var LD_PRELOAD> to the jciAAPA and aap_service
-#      blocks of every sm config that has them (sm.conf / sm_WCP.conf)
-#   3. backs up and replaces /etc/aap_system_attributes*.xml
-#   4. restarts jciAAPA + aap_service via smctl (or asks for a power cycle)
+#   aa  = oem-aa-mod (Android Auto -> HUD, GAL 1.6):
+#         .so + libpatch.conf -> /data_persist/oem-aa-mod/, LD_PRELOAD
+#         into the jciAAPA + aap_service blocks of every sm config that has
+#         them, /etc AAP attribute XML swap, service restarts.
+#   cp  = CarPlay bridge (KidMixer mazda-carplay-hud, ilshyma build with the
+#         km/h + Vietnamese-fold fixes):
+#         .so -> /data_persist/cp-hud-mod/, LD_PRELOAD + LD_LIBRARY_PATH into
+#         the jciCARPLAY block of the ONE config the unit actually boots
+#         (get_board_type.sh -> sm_WCP.conf on WCP hardware, else sm.conf),
+#         NaviSupported=TRUE in /etc/devmgr_config_master.xml (this is what
+#         makes the iPhone send the iAP2 maneuver stream), service restart.
 #
-# Idempotent; keeps first-generation backups (*.bak_vietnav, *.orig).
-# Fails closed: sanity-checks every file edit and leaves the unit untouched
-# on any surprise. BusyBox ash.
+# Idempotent; keeps first-generation backups (*.bak_vietnav, *.orig). Fails
+# closed: sanity-checks every edit and leaves the unit untouched on any
+# surprise, including an LD_PRELOAD another mod already placed in the same
+# service block. BusyBox ash.
 
 set -u
 
+TARGET=${1:-all}
 HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || HERE=$(dirname "$0")
 PAYLOAD="$HERE/vietnav-payload"
-DEST=/data_persist/oem-aa-mod
 LOG=/tmp/vietnav-install.log
 TAG="[vietnav]"
 WDOG="/sys/class/gpio/Watchdog Disable/value"
+AA_DIR=/data_persist/oem-aa-mod
+CP_DIR=/data_persist/cp-hud-mod
+MASTER=/etc/devmgr_config_master.xml
 
 log() { echo "$TAG $*" | tee -a "$LOG"; }
 die() { echo "$TAG ERROR: $*" | tee -a "$LOG"; mount -o remount,ro / 2>/dev/null; exit 1; }
 feed() { [ -w "$WDOG" ] && echo 1 > "$WDOG" 2>/dev/null; return 0; }
+want() { [ "$TARGET" = "all" ] || [ "$TARGET" = "$1" ]; }
 
 [ "$(id -u)" = "0" ] || die "must run as root"
 [ -f /jci/sm/sm.conf ] || die "not a CMU (no /jci/sm/sm.conf)"
 : > "$LOG" || die "cannot write $LOG"
 
-# --- payload -----------------------------------------------------------------
-for f in libpatch-blmjciaapa.so libpatch-aap_service.so libpatch.conf \
-         aap_system_attributes.xml aap_system_attributes_UCP.xml; do
-    [ -f "$PAYLOAD/$f" ] || die "missing payload file: vietnav-payload/$f
-(rebuild the stick: python installer/build-kit.py — see patches/oem-aa-mod/README.md)"
-done
-# Optional: the HUD-merge shim (only useful with the nav SD card).
-SVC=""; [ -f "$PAYLOAD/libpatch-svcjcinavi.so" ] && SVC=libpatch-svcjcinavi.so
-
 FW=$(grep -m1 -o '74\.[0-9][0-9][0-9]' /jci/version.ini 2>/dev/null || echo "?")
-log "firmware: ${FW:-unknown} (tested line: 74.00.324)"
+log "target=$TARGET firmware: ${FW:-unknown} (tested line: 74.00.324)"
 
-# --- 1) binaries to /data_persist ----------------------------------------------
-mount -o remount,rw / 2>/dev/null
-feed
-mkdir -p "$DEST" || die "cannot mkdir $DEST"
-for f in libpatch-blmjciaapa.so libpatch-aap_service.so libpatch.conf $SVC; do
-    cp "$PAYLOAD/$f" "$DEST/$f" || die "copy failed: $f"
-    chmod 0644 "$DEST/$f"
-done
-sync
-log "payload -> $DEST ($(ls "$DEST" | wc -l) files)"
-
-# --- 2) sm.conf LD_PRELOAD for jciAAPA + aap_service ---------------------------
-PRE_AAPA='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-blmjciaapa.so"/>'
-PRE_AAP='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-aap_service.so"/>'
-TOK=data_persist/oem-aa-mod/libpatch
-for CONF in /jci/sm/sm.conf /jci/sm/sm_WCP.conf; do
-    [ -f "$CONF" ] || continue
-    grep -q 'name="jciAAPA"' "$CONF" || { log "$(basename "$CONF"): no jciAAPA block, skipped"; continue; }
-    BAK="/data_persist/$(basename "$CONF").bak_vietnav"
-    [ -f "$BAK" ] || { cp -a "$CONF" "$BAK"; log "backup -> $BAK"; }
-    if grep -q "$TOK" "$CONF"; then
-        log "$(basename "$CONF"): LD_PRELOAD already present, skipped"
+# --- helper: insert environ_var lines into one <service> block -------------------
+# insert_env <conf> <svc-regex> <line1> [line2]
+# Idempotent, refuses when the block already carries a foreign LD_PRELOAD,
+# sanity-checks the line count before committing, then disarms reset_board.
+insert_env() {
+    _conf=$1; _svc=$2; _l1=$3; _l2=${4:-}
+    _bak="/data_persist/$(basename "$_conf").bak_vietnav"
+    [ -f "$_bak" ] || { cp -a "$_conf" "$_bak"; log "backup -> $_bak"; }
+    if sed -n "/$_svc/,/<\/service>/p" "$_conf" | grep -q 'env_name="LD_PRELOAD"'; then
+        log "$(basename "$_conf"): $_svc already has an LD_PRELOAD - SKIP (another mod? install by hand)"
+        return 0
+    fi
+    _tok=$(echo "$_l1" | sed 's/.*env_value="//; s/".*//')
+    if grep -q "$_tok" "$_conf"; then
+        log "$(basename "$_conf"): $_svc LD_PRELOAD already ours, skipped"
+        return 0
+    fi
+    feed
+    awk -v svc="$_svc" -v l1="$_l1" -v l2="$_l2" '
+        $0 ~ svc { print; print l1; if (l2 != "") print l2; next }
+        1
+    ' "$_conf" > /tmp/vietnav.sm.new || die "awk failed on $_conf"
+    _old=$(wc -l < "$_conf"); _new=$(wc -l < /tmp/vietnav.sm.new)
+    _add=1; [ -n "$_l2" ] && _add=2
+    if grep -q "$_tok" /tmp/vietnav.sm.new && [ "$_new" = "$((_old + _add))" ]; then
+        cp /tmp/vietnav.sm.new "$_conf"
+        log "$(basename "$_conf"): inserted into $_svc ($_old->$_new lines)"
     else
-        feed
-        # insert right after each service opening tag; aap_service is optional
-        awk -v paapa="$PRE_AAPA" -v paap="$PRE_AAP" '
-            /<service .*name="jciAAPA"/   { print; print paapa; next }
-            /<service .*name="aap_service"/ { print; print paap; next }
-            1
-        ' "$CONF" > /tmp/vietnav.sm.new || die "awk failed on $CONF"
-        old=$(wc -l < "$CONF"); new=$(wc -l < /tmp/vietnav.sm.new)
-        ins=$(grep -c "$TOK" /tmp/vietnav.sm.new)
-        want=$((old + ins - $(grep -c "$TOK" "$CONF")))
-        if [ "$ins" -ge 1 ] && [ "$new" = "$want" ]; then
-            cp /tmp/vietnav.sm.new "$CONF"
-            log "$(basename "$CONF"): inserted $ins environ_var line(s) ($old->$new)"
-        else
-            rm -f /tmp/vietnav.sm.new
-            die "$(basename "$CONF"): sanity check failed ($old->$new, tok=$ins), left untouched"
-        fi
         rm -f /tmp/vietnav.sm.new
+        die "$(basename "$_conf"): sanity check failed ($_old->$_new), left untouched"
     fi
-    # a shim fault must not reboot-loop the unit
-    sed -i '/name="jciAAPA"/ s/reset_board="yes"/reset_board="no"/' "$CONF"
-done
+    rm -f /tmp/vietnav.sm.new
+    sed -i "/$_svc/ s/reset_board=\"yes\"/reset_board=\"no\"/" "$_conf"
+}
 
-# --- 3) AAP system attribute XMLs ----------------------------------------------
-for XML in aap_system_attributes.xml aap_system_attributes_UCP.xml; do
-    [ -f "/etc/$XML" ] || { log "WARN: /etc/$XML absent, skipped"; continue; }
-    [ -f "/etc/$XML.orig" ] || cp -a "/etc/$XML" "/etc/$XML.orig"
-    cp "$PAYLOAD/$XML" "/etc/$XML" || die "copy failed: $XML"
-done
-sync
-log "system attribute XMLs updated (backups: /etc/*.xml.orig)"
-
-# --- 4) restart the two services ------------------------------------------------
-feed
-for SVC_NAME in jciAAPA aap_service; do
-    if smctl -r -n "$SVC_NAME" >/dev/null 2>&1; then
-        log "restarted $SVC_NAME"
+restart_svc() {
+    feed
+    if smctl -r -n "$1" >/dev/null 2>&1; then
+        log "restarted $1"
     else
-        log "WARN: smctl could not restart $SVC_NAME - a power cycle (ignition off) will do it"
+        log "WARN: smctl could not restart $1 - a power cycle (ignition off) will do it"
     fi
-done
+}
+
+# ============================ Android Auto ======================================
+if want aa; then
+    for f in libpatch-blmjciaapa.so libpatch-aap_service.so libpatch.conf \
+             aap_system_attributes.xml aap_system_attributes_UCP.xml; do
+        [ -f "$PAYLOAD/$f" ] || die "missing payload file: vietnav-payload/$f (rebuild the stick)"
+    done
+    log "--- Android Auto (oem-aa-mod) ---"
+    mount -o remount,rw / 2>/dev/null
+    mkdir -p "$AA_DIR" || die "cannot mkdir $AA_DIR"
+    for f in libpatch-blmjciaapa.so libpatch-aap_service.so libpatch.conf; do
+        cp "$PAYLOAD/$f" "$AA_DIR/$f" || die "copy failed: $f"
+        chmod 0644 "$AA_DIR/$f"
+    done
+    if [ -f "$PAYLOAD/libpatch-svcjcinavi.so" ]; then
+        cp "$PAYLOAD/libpatch-svcjcinavi.so" "$AA_DIR/" && chmod 0644 "$AA_DIR/libpatch-svcjcinavi.so"
+    fi
+    sync
+    log "payload -> $AA_DIR"
+
+    for CONF in /jci/sm/sm.conf /jci/sm/sm_WCP.conf; do
+        [ -f "$CONF" ] || continue
+        grep -q 'name="jciAAPA"' "$CONF" || { log "$(basename "$CONF"): no jciAAPA block, skipped"; continue; }
+        insert_env "$CONF" '<service .*name="jciAAPA"' \
+            '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-blmjciaapa.so"/>'
+        insert_env "$CONF" '<service .*name="aap_service"' \
+            '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-aap_service.so"/>'
+    done
+
+    for XML in aap_system_attributes.xml aap_system_attributes_UCP.xml; do
+        [ -f "/etc/$XML" ] || { log "WARN: /etc/$XML absent, skipped"; continue; }
+        [ -f "/etc/$XML.orig" ] || cp -a "/etc/$XML" "/etc/$XML.orig"
+        cp "$PAYLOAD/$XML" "/etc/$XML" || die "copy failed: $XML"
+    done
+    sync
+    log "AAP attribute XMLs updated (backups: /etc/*.xml.orig)"
+    restart_svc jciAAPA
+    restart_svc aap_service
+fi
+
+# ============================ CarPlay bridge =====================================
+if want cp; then
+    [ -f "$PAYLOAD/libpatch-blmjcicarplay.so" ] \
+        || die "missing payload file: vietnav-payload/libpatch-blmjcicarplay.so (rebuild the stick)"
+    log "--- CarPlay bridge (mazda-carplay-hud) ---"
+    mount -o remount,rw / 2>/dev/null
+    mkdir -p "$CP_DIR" || die "cannot mkdir $CP_DIR"
+    cp "$PAYLOAD/libpatch-blmjcicarplay.so" "$CP_DIR/libpatch-blmjcicarplay.so" \
+        || die "copy failed: libpatch-blmjcicarplay.so"
+    chmod 0644 "$CP_DIR/libpatch-blmjcicarplay.so"
+    sync
+    log "payload -> $CP_DIR"
+
+    # WCP hardware boots sm -f sm_WCP.conf; otherwise sm.conf (KidMixer logic).
+    if [ -x /jci/scripts/get_board_type.sh ]; then
+        /jci/scripts/get_board_type.sh >/dev/null 2>&1; BT=$?
+    else
+        BT=""
+    fi
+    if [ "$BT" = "2" ] && [ -f /jci/sm/sm_WCP.conf ]; then
+        CONF=/jci/sm/sm_WCP.conf
+        log "WCP hardware (get_board_type.sh=2) -> patching sm_WCP.conf"
+    else
+        CONF=/jci/sm/sm.conf
+        log "wired/standard hardware -> patching sm.conf"
+    fi
+    grep -q 'name="jciCARPLAY"' "$CONF" || die "no jciCARPLAY block in $CONF"
+    insert_env "$CONF" '<service .*name="jciCARPLAY"' \
+        '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>' \
+        '            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
+
+    # NaviSupported=TRUE is what makes the iPhone stream maneuvers over iAP2.
+    if [ -f "$MASTER" ]; then
+        MBAK=/data_persist/devmgr_config_master.xml.bak_vietnav
+        [ -f "$MBAK" ] || cp -a "$MASTER" "$MBAK"
+        if grep -q '<name>NaviSupported</name><value>FALSE</value>' "$MASTER"; then
+            sed -i 's#<name>NaviSupported</name><value>FALSE</value>#<name>NaviSupported</name><value>TRUE</value>#' "$MASTER"
+            log "set NaviSupported=TRUE in $MASTER (backup: $MBAK)"
+        else
+            log "NaviSupported already TRUE (or absent) in $MASTER"
+        fi
+    else
+        log "WARN: $MASTER absent - iPhone may not stream maneuvers"
+    fi
+    sync
+    restart_svc jciCARPLAY
+fi
+
 sync
 mount -o remount,ro / 2>/dev/null
-log "DONE. Plug in an Android phone and start navigation; the HUD should show arrow + distance."
-log "(Street name: see docs/vietmap-hud-gap.md for the known VIETMAP LIVE gap.)"
+log "DONE ($TARGET)."
+log "AA:      Android phone + navigation -> arrow + distance on the HUD."
+log "CarPlay: iPhone + navigation (Apple Maps / VIETMAP LIVE) -> same."
+log "(Street name for VIETMAP LIVE on AA: see docs/vietmap-hud-gap.md.)"
 exit 0

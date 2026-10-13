@@ -2,28 +2,33 @@ VIETNAV HUD - in-car steps (TouchTune USB install)
 ====================================================
 
 WHAT YOU NEED
-  * A FAT32 USB stick built by:  python installer/build-kit.py <stick>:
-      install-patches.sh  vietnav-touch.sh  vietnav-install.sh
-      vietnav-rollback.sh vietnav-collect.sh  vietnav-payload/
-      + the TouchTune trigger files (jci-autoupdate, LAUNCHER.NAME,
-        TOUCHTUNE.ID, LICENSE, NOTICE, <payload>.up)
-  * vietnav-payload/ must contain the built oem-aa-mod .so files; without
-    them the stick still works in COLLECT (diagnostics) mode only.
+  * A FAT32 USB stick built by:  python installer/build-kit.py <stick>
+    The kit ships BOTH mods, ready to install:
+      AA      oem-aa-mod 0.10.0 binaries (Android Auto -> HUD, GAL 1.6)
+      CARPLAY mazda-carplay-hud bridge (ilshyma build: km/h + VN fold)
+    Payload provenance + md5: vietnav-payload/PAYLOAD-SOURCES.md
 
 INSTALL (touch, no keyboard)
   1. Ignition ON (engine running or ACC), radio fully booted.
   2. Insert the stick. The update dialog appears after a few seconds.
   3. Tap INSTALL. The VIETNAV HUD menu appears:
-       CAI DAT   -> installs the mod, restarts jciAAPA + aap_service
+       CAI DAT   -> pick a target: AA / CARPLAY / CA HAI (both)
        THU THAP  -> writes vietnav-collect-<date>.tgz to the stick
-       GO BO     -> (when installed) removes the mod
-  4. After CAI DAT: plug in an Android phone, start navigation, watch the
-     HUD for arrow + distance (street name: see docs/vietmap-hud-gap.md).
+       GO BO     -> (when installed) removes what is installed
+  4. After CAI DAT:
+       AA:      plug in an Android phone, start navigation
+       CARPLAY: connect an iPhone, start navigation (Apple Maps or
+                VIETMAP LIVE)
+     The HUD should show the turn arrow + distance; street names fold
+     Vietnamese diacritics to the HUD font automatically.
 
 IF NO DIALOG APPEARS
   * Pull the stick, wait 10 s, reinsert. Check the stick is FAT32 and its
     root has jci-autoupdate + the .up trigger file.
-  * Terminal fallback (root shell): sh /mnt/sdb1/vietnav-install.sh
+  * Terminal fallback (root shell):
+      sh /mnt/sdb1/vietnav-install.sh aa     (Android Auto only)
+      sh /mnt/sdb1/vietnav-install.sh cp     (CarPlay bridge only)
+      sh /mnt/sdb1/vietnav-install.sh all    (both)
 
 DIAGNOSTICS SESSION (recommended first visit)
   * Tap THU THAP and keep the .tgz - it carries firmware + sm.conf + the
@@ -33,3 +38,10 @@ DIAGNOSTICS SESSION (recommended first visit)
 UNINSTALL
   * Same menu, GO BO. A power cycle finishes it if smctl could not
     restart a service.
+
+NOTES
+  * Installing on a unit whose jciCARPLAY/jciAAPA block already has an
+    LD_PRELOAD from another mod: the installer SKIPS that service and
+    says so in the log - sort the other mod out first.
+  * The CarPlay install sets NaviSupported=TRUE (what makes the iPhone
+    stream maneuvers); rollback restores FALSE.

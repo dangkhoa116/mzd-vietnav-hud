@@ -50,22 +50,30 @@ tests/
 ## Touch install (TouchTune USB)
 
 The installer kit uses the same TouchTune USB mechanism as the other kits for this
-car (insert stick → tap INSTALL on the unit's update dialog → a Vietnamese menu:
-`CAI DAT` install / `THU THAP` collect diagnostics / `GO BO` remove). No keyboard
-needed at the car.
+car (insert stick → tap INSTALL on the unit's update dialog → a Vietnamese menu).
+No keyboard needed at the car. The kit ships **both mods ready to install**:
+
+- **AA** — oem-aa-mod 0.10.0 release binaries (Android Auto → HUD, GAL 1.6)
+- **CARPLAY** — the mazda-carplay-hud bridge (ilshyma build: km/h fix + VN fold)
+
+Menu: `CAI DAT` → pick **AA / CARPLAY / CA HAI** · `THU THAP` → diagnostics pack
+to the stick · `GO BO` → removes what is installed. Payload provenance and md5s
+land in `vietnav-payload/PAYLOAD-SOURCES.md`.
 
 ```
-# payload: point VIETNAV_AA_MOD at an oem-aa-mod checkout with
-# mazda/build/release/ populated (apply patches/oem-aa-mod/*.patch first, then
-# build per its docs/build.md); without the .so files the stick still builds
-# and works in COLLECT-only mode.
 python installer/build-kit.py E:\        # or omit the arg -> installer/dist/
 ```
 
-`build-kit.py` copies the TouchTune trigger files from the wireless-CarPlay
-all-in-one folder when they are not on the stick (override with
-`VIETNAV_TOUCHTUNE`); they are GPL-3.0 by Miatafy and therefore not committed
-here. In-car steps: [installer/VIETNAV-STEPS.txt](installer/VIETNAV-STEPS.txt)
+`build-kit.py` picks the oem-aa-mod binaries from an upstream release
+(`VIETNAV_AA_MOD_RELEASE`) or a source build (`VIETNAV_AA_MOD`, with
+`patches/oem-aa-mod/*.patch` applied — needed if you want the long-road-name
+fix in the shipped binary), and the CarPlay bridge via `VIETNAV_CP_HUD`. It
+also copies the TouchTune trigger files from the wireless-CarPlay all-in-one
+folder when they are not on the stick (override with `VIETNAV_TOUCHTUNE`);
+they are GPL-3.0 by Miatafy and therefore not committed here. A mod whose
+binaries are missing is simply not offered in the menu.
+
+In-car steps: [installer/VIETNAV-STEPS.txt](installer/VIETNAV-STEPS.txt)
 ([tiếng Việt](installer/VIETNAV-STEPS.vi.txt)).
 
 ## The patch: long Vietnamese street names on the HUD
