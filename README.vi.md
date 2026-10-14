@@ -163,7 +163,7 @@ nhau, không kit nào làm hỏng phần của kit khác.
 - [x] Bộ cài chạm cho firmware VN (74.00.331): AA mod + CarPlay bridge cùng một
       dia TouchTune, có gỡ cài và chế độ thu thập chẩn đoán; launcher dùng
       chung sống cùng kit TPMS và kit CarPlay không dây
-- [x] Kiểm tra trên máy: 75 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
+- [x] Kiểm tra trên máy: 87 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
       chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
       gì binary jci-dialog của xe thật sự hiển thị được
 - [ ] Buổi chạy xe: THU THAP trước, rồi AA, rồi CarPlay — xác nhận trên
