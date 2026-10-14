@@ -10,6 +10,8 @@ run under BusyBox ash when BUSYBOX points at one (busybox-w32 on Windows),
 otherwise under the sh in PATH. VIETNAV_REAL_SM runs the install/rollback
 round trip on the car's own sm configs too (never commit those: JCI files).
 """
+import atexit
+import hashlib
 import importlib.util
 import os
 import re
@@ -110,7 +112,7 @@ def car_line(line, t):
 
 class Car:
     def __init__(self, wcp_conf=False, sm=None, smw=None):
-        self.t = tempfile.mkdtemp(prefix="vietnav-car-").replace("\\", "/")
+        self.t = scratch("vietnav-car-").replace("\\", "/")
         for d in ("jci/sm", "jci/scripts", "jci/bds", "jci/tools", "etc", "data_persist",
                   "data/integration", "tmp", "bin", "usb/vietnav-payload",
                   "sys/class/gpio/Watchdog Disable"):
@@ -126,6 +128,7 @@ class Car:
                    "libpatch-blmjcicarplay.so"):
             self.write("usb/vietnav-payload/" + so, b"\x7fELF" + so.encode())
         self.write("usb/vietnav-payload/libpatch.conf", b"hud = true\n")
+        self.write_sums()
         # the other kits, as they leave the car
         self.write("jci/scripts/get_board_type.sh", GATE)
         self.write("data_persist/wcp-trial", b"999999\n")
@@ -138,7 +141,8 @@ class Car:
             with open(os.path.join(INST, name), encoding="utf-8") as f:
                 self.write("usb/" + name, rewrite(f.read(), self.t).encode())
         self.stub("bin/id", "id", "echo 0")
-        self.stub("bin/mount", "mount", '[ -f "@T@/mount-fails" ] && exit 1; exit 0')
+        self.stub("bin/mount", "mount", '[ -f "@T@/mount-fails" ] && exit 1\n'
+                  'case "$*" in *remount,ro*) [ -f "@T@/mount-ro-fails" ] && exit 1 ;; esac\nexit 0')
         self.stub("bin/smctl", "smctl", "exit 0")
         self.stub("bin/killall", "killall", "exit 0")
         # dialog-open: how many more ps calls still see a payload's box up
@@ -164,6 +168,16 @@ class Car:
             return None
         with open(p, "rb") as f:
             return f.read()
+
+    def write_sums(self):
+        """vietnav-payload/PAYLOAD-SOURCES.md as build-kit writes it."""
+        d = os.path.join(self.t, "usb/vietnav-payload")
+        rows = ["| file | md5 | source |", "|---|---|---|"]
+        for n in sorted(os.listdir(d)):
+            if n != "PAYLOAD-SOURCES.md":
+                with open(os.path.join(d, n), "rb") as f:
+                    rows.append("| %s | `%s` | test |" % (n, hashlib.md5(f.read()).hexdigest()))
+        self.write("usb/vietnav-payload/PAYLOAD-SOURCES.md", ("\n".join(rows) + "\n").encode())
 
     def stub(self, rel, name, body):
         self.write(rel, (STUB % (name, body)).replace("@T@", self.t).encode())
@@ -199,6 +213,21 @@ class Car:
 
 
 FAILED = []
+SCRATCH = []
+
+
+def scratch(prefix):
+    """A temp folder that goes away when the run ends (VIETNAV_KEEP=1 keeps them)."""
+    d = tempfile.mkdtemp(prefix=prefix)
+    SCRATCH.append(d)
+    return d
+
+
+@atexit.register
+def _cleanup():
+    if not os.environ.get("VIETNAV_KEEP"):
+        for d in SCRATCH:
+            shutil.rmtree(d, ignore_errors=True)
 BAD_DIALOGS = set()
 
 
@@ -374,6 +403,85 @@ def install_tests():
     check("remount failure: install stops, nothing changed",
           rc != 0 and {k: v for k, v in c.tree().items() if k != "mount-fails"} ==
           {k: v for k, v in before.items() if k != "mount-fails"}, out)
+
+    # --- a damaged payload file (or no checksums) stops the install
+    for what, spoil in (("a damaged .so", lambda c: c.write("usb/vietnav-payload/libpatch-blmjciaapa.so", b"\x7fELF bad")),
+                        ("a damaged XML", lambda c: c.write("usb/vietnav-payload/aap_system_attributes.xml", b"<x/>\n")),
+                        ("no PAYLOAD-SOURCES.md", lambda c: os.remove(os.path.join(c.t, "usb/vietnav-payload/PAYLOAD-SOURCES.md")))):
+        c = Car()
+        spoil(c)
+        before = c.tree()
+        rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+        check("payload check: %s stops the install, nothing changed" % what,
+              rc != 0 and c.tree() == before and "nothing changed" in out, out)
+    c = Car()
+    rc, out = c.run("usb/vietnav-install.sh", "cp", "--yes")
+    check("payload check: md5 ok is logged", rc == 0 and "payload md5 ok: libpatch-blmjcicarplay.so" in out, out)
+
+    # --- a write that fails half-way: everything this run changed goes back
+    c = Car(wcp_conf=True)
+    keep = {p: c.read(p) for p in ("jci/sm/sm.conf", "jci/sm/sm_WCP.conf", "etc/devmgr_config_master.xml",
+                                   "etc/aap_system_attributes.xml", "etc/aap_system_attributes_UCP.xml")}
+    os.makedirs(os.path.join(c.t, "etc/devmgr_config_master.xml.vietnav-new"))   # the last write fails
+    rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+    st = os.path.join(c.t, "data_persist/vietnav")
+    check("half-way failure: sm configs, /etc and records put back",
+          rc != 0 and all(c.read(p) == b for p, b in keep.items())
+          and not os.path.exists(os.path.join(c.t, "etc/aap_system_attributes.xml.orig"))
+          and not os.path.exists(os.path.join(st, "reset_board"))
+          and not os.path.exists(os.path.join(st, "navisupported"))
+          and not os.path.exists(os.path.join(st, "txn"))
+          and "the unit is as it was before this run" in out, out)
+    os.rmdir(os.path.join(c.t, "etc/devmgr_config_master.xml.vietnav-new"))
+    rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+    rc2, out2 = c.run("usb/vietnav-rollback.sh", "all")
+    check("half-way failure: a later install + rollback round trip is exact",
+          rc == 0 and rc2 == 0 and all(c.read(p) == b for p, b in keep.items()), out + out2)
+
+    # --- another mod puts its line above ours after the install: rollback
+    # still takes ours out of the block, leaves theirs, says so if it cannot
+    other = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/aa-mod/libaawl.so"/>'
+    c = Car(wcp_conf=True)
+    c.run("usb/vietnav-install.sh", "all", "--yes")
+    for name in ("sm.conf", "sm_WCP.conf"):
+        rows = c.conf(name).splitlines()
+        i = next(n for n, l in enumerate(rows) if 'name="jciAAPA"' in l)
+        rows.insert(i + 1, other)
+        c.write("jci/sm/" + name, ("\n".join(rows) + "\n").encode())
+    rc, out = c.run("usb/vietnav-rollback.sh", "all")
+    both = c.conf("sm.conf") + c.conf("sm_WCP.conf")
+    check("rollback: our lines go even below another mod's line, theirs stay",
+          rc == 0 and "oem-aa-mod" not in both and "cp-hud-mod" not in both
+          and both.count("libaawl.so") == 2, out)
+
+    # --- one run at a time
+    c = Car()
+    p = subprocess.Popen(SH + ["-c", 'echo $$ > "%s/holder.pid"; exec sleep 30' % c.t])
+    for _ in range(50):
+        if c.read("holder.pid"):
+            break
+        time.sleep(0.1)
+    os.makedirs(os.path.join(c.t, "tmp/vietnav.lock"))
+    c.write("tmp/vietnav.lock/pid", c.read("holder.pid"))
+    before = c.tree()
+    rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+    rc2, out2 = c.run("usb/vietnav-rollback.sh", "all")
+    p.kill(); p.wait()
+    check("lock: a running install/rollback blocks another, nothing changed",
+          rc != 0 and rc2 != 0 and c.tree() == before and "another vietnav" in out, out + out2)
+    c.write("tmp/vietnav.lock/pid", b"999999\n")          # a run that was killed
+    rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+    check("lock: a stale lock is taken over, and released after",
+          rc == 0 and not os.path.exists(os.path.join(c.t, "tmp/vietnav.lock")), out)
+
+    # --- / that will not go back to read-only is reported
+    c = Car()
+    c.write("mount-ro-fails", b"")
+    rc, out = c.run("usb/vietnav-install.sh", "aa", "--yes")
+    rc2, out2 = c.run("usb/vietnav-rollback.sh", "aa")
+    check("read-only remount failure is logged (install and rollback)",
+          rc == 0 and rc2 == 0 and "did not go back to read-only" in out
+          and "did not go back to read-only" in out2, out + out2)
 
     # --- collect: tarball on the stick, other kits named
     c = Car(wcp_conf=True)
@@ -572,7 +680,14 @@ def touch_tests():
     os.remove(os.path.join(c.t, "usb/install-patches.sh"))
     with open(os.path.join(INST, "install-patches.sh"), encoding="utf-8") as f:
         c.write("usb/install-patches.sh", rewrite(f.read(), c.t).encode())
-    c.seq(0, 2)                       # CAI DAT, CA HAI
+    # a second tap confirms; HUY there changes nothing
+    before = c.tree()
+    c.seq(0, 2, 1)                    # CAI DAT, CA HAI, then HUY on the confirm
+    c.run("usb/install-patches.sh")
+    check("touch: HUY on the install confirm changes nothing",
+          c.tree() == before and "CAI DAT AA + CARPLAY?" in c.stublog(), c.stublog())
+    c.write("stub.log", b"")
+    c.seq(0, 2, 0)                    # CAI DAT, CA HAI, CAI DAT (confirm)
     rc, out = c.run("usb/install-patches.sh")
     time.sleep(0.5)
     tlog = (c.read("usb/vietnav-touch.log") or b"").decode()
@@ -591,7 +706,12 @@ def touch_tests():
     check("touch: menu shows the status and the credit once installed",
           "DA CAI AA + CARPLAY / installed" in c.stublog()
           and "GO BO = remove" in c.stublog() and "- by dangkhoa116 -" in c.stublog(), c.stublog())
-    c.seq(0)                          # GO BO
+    installed = c.read("jci/sm/sm.conf")
+    c.seq(0, 1)                       # GO BO, then HUY on the confirm
+    c.run("usb/install-patches.sh")
+    check("touch: HUY on the remove confirm changes nothing",
+          c.read("jci/sm/sm.conf") == installed and "GO BO AA + CARPLAY?" in c.stublog(), c.stublog())
+    c.seq(0, 0)                       # GO BO, GO BO (confirm)
     c.run("usb/install-patches.sh")
     check("touch: GO BO puts sm.conf back", c.read("jci/sm/sm.conf") == sm0, c.stublog())
 
@@ -605,7 +725,7 @@ def build_kit_tests():
     old_tpms = b"#!/bin/sh\n# install-patches.sh - the touch launcher for this stick.\nexec sh tpms-touch.sh\n"
 
     def stick(files):
-        d = tempfile.mkdtemp(prefix="vietnav-stick-")
+        d = scratch("vietnav-stick-")
         for n, b in files.items():
             with open(os.path.join(d, n), "wb") as f:
                 f.write(b)

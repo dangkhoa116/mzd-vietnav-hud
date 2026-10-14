@@ -57,9 +57,10 @@ phím. Kit mang **sẵn cả hai mod**:
 - **AA** — binary bản release 0.10.0 của oem-aa-mod (Android Auto → HUD, GAL 1.6)
 - **CARPLAY** — bridge mazda-carplay-hud (bản ilshyma: fix km/h + fold tiếng Việt)
 
-Menu: `CAI DAT` → chọn **AA / CARPLAY / CA HAI** · `THU THAP` → gói chẩn đoán
-ra dia · `GO BO` → gỡ phần đã cài. Nguồn gốc + md5 từng binary nằm trong
-`vietnav-payload/PAYLOAD-SOURCES.md`; mỗi lần chạy đều để log trên USB
+Menu: `CAI DAT` → chọn **AA / CARPLAY / CA HAI** rồi xác nhận · `THU THAP` →
+gói chẩn đoán ra dia · `GO BO` → xác nhận rồi gỡ phần đã cài. Nguồn gốc + md5
+từng binary nằm trong `vietnav-payload/PAYLOAD-SOURCES.md`, và trên xe bộ cài
+kiểm tra md5 từng file trước khi ghi bất cứ gì; mỗi lần chạy đều để log trên USB
 (`vietnav-touch.log`, `vietnav-install.log`, `vietnav-rollback.log`).
 
 ```
@@ -145,7 +146,13 @@ nhau, không kit nào làm hỏng phần của kit khác.
   chốt chống boot-loop của kit CarPlay, để nguyên.
 - **Mod khác trong cùng service.** Nếu `jciAAPA`, `aap_service` hoặc
   `jciCARPLAY` đã có `environ_var` của mod khác, installer dừng trước khi ghi bất
-  cứ gì: không bao giờ cài dở. Xử lý mod kia trước.
+  cứ gì. Xử lý mod kia trước. Mod nào chèn dòng vào cùng service *sau* khi đã
+  cài kit này thì không chặn được việc gỡ: dòng của kit này được gỡ dù nằm ở
+  đâu trong block, dòng của mod kia giữ nguyên.
+- **Không cài dở.** File payload hỏng (sai md5) thì dừng trước khi ghi. Nếu
+  đang ghi mà lỗi giữa chừng, mọi thứ lần chạy đó đã đổi (sm config, `/etc`,
+  bản ghi của kit) được trả lại từ bản sao chụp ngay trước đó. Mỗi lúc chỉ
+  một lần cài/gỡ chạy (`/tmp/vietnav.lock`).
 
 ## Trạng thái & lộ trình
 

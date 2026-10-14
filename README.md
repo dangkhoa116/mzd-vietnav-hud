@@ -57,9 +57,11 @@ No keyboard needed at the car. The kit ships **both mods ready to install**:
 - **AA** — oem-aa-mod 0.10.0 release binaries (Android Auto → HUD, GAL 1.6)
 - **CARPLAY** — the mazda-carplay-hud bridge (ilshyma build: km/h fix + VN fold)
 
-Menu: `CAI DAT` → pick **AA / CARPLAY / CA HAI** · `THU THAP` → diagnostics pack
-to the stick · `GO BO` → removes what is installed. Payload provenance and md5s
-land in `vietnav-payload/PAYLOAD-SOURCES.md`; every run leaves its log on the
+Menu: `CAI DAT` → pick **AA / CARPLAY / CA HAI**, then confirm · `THU THAP` →
+diagnostics pack to the stick · `GO BO` → confirm, then removes what is
+installed. Payload provenance and md5s land in
+`vietnav-payload/PAYLOAD-SOURCES.md`, and the install checks every payload file
+against them on the car before it writes anything; every run leaves its log on the
 stick (`vietnav-touch.log`, `vietnav-install.log`, `vietnav-rollback.log`).
 
 ```
@@ -153,8 +155,14 @@ undoes another's.
   the CarPlay kit's boot-loop guard and is left as it is.
 - **Another mod in the same service.** If `jciAAPA`, `aap_service` or
   `jciCARPLAY` already has an `environ_var` from a mod other than this one, the
-  install stops before writing anything: no half install. Sort the other mod out
-  first.
+  install stops before writing anything. Sort the other mod out first. A mod
+  that adds its line to the same service *after* this install does not stop
+  the rollback: our lines are taken out wherever they sit in the block, theirs
+  stay.
+- **No half install.** A damaged payload file (md5) stops the install before
+  any write. A write that fails half-way puts back everything that run changed
+  (sm configs, `/etc`, its own records) from copies taken just before. One
+  install/rollback at a time (`/tmp/vietnav.lock`).
 
 ## Status & roadmap
 

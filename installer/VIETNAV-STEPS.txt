@@ -13,9 +13,11 @@ INSTALL (touch, no keyboard)
   2. Insert the stick. The update dialog appears after a few seconds.
   3. Tap INSTALL. The VIETNAV HUD menu appears (status on top, Vietnamese
      and English):
-       CAI DAT   -> pick a target: AA / CARPLAY / CA HAI (both)
+       CAI DAT   -> pick a target: AA / CARPLAY / CA HAI (both), then
+                    CAI DAT again to confirm (HUY = nothing changes)
        THU THAP  -> writes vietnav-collect-<date>.tgz to the stick
-       GO BO     -> (when installed) removes what is installed
+       GO BO     -> (when installed) GO BO again to confirm, then removes
+                    what is installed
   4. After CAI DAT:
        AA:      plug in an Android phone, start navigation
        CARPLAY: connect an iPhone, start navigation (Apple Maps or
@@ -65,5 +67,8 @@ NOTES
   * Installing on a unit whose jciCARPLAY/jciAAPA/aap_service block already
     has an environ_var from another mod: the installer STOPS before changing
     anything and says so in the log - sort the other mod out first.
+  * A payload file with the wrong md5 (a damaged stick) also stops the
+    install before any change: rebuild the stick. If a write fails
+    half-way, the install puts back everything it had changed.
   * The CarPlay install sets NaviSupported=TRUE (what makes the iPhone
     stream maneuvers); rollback puts FALSE back only if it was FALSE.

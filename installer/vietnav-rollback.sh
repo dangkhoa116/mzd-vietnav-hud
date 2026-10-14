@@ -7,10 +7,13 @@
 #   cp  removes our jciCARPLAY lines (LD_PRELOAD + LD_LIBRARY_PATH) and puts
 #       NaviSupported back to FALSE - only if the install changed it
 #
-# Only our own lines go: they are matched whole, so another mod's lines in
-# the same file are never touched. reset_board goes back to "yes" only where
-# the install recorded that it changed it in sm.conf; sm_WCP.conf's
-# reset_board belongs to the wireless-CarPlay kit and stays as it is.
+# Only our own lines go: they are matched whole, wherever they sit inside
+# that service's block (another mod may have put its own line above them
+# since), so another mod's lines are never touched - and none of ours may be
+# left in the block, or it stops and says so. reset_board goes back to
+# "yes" only where the install recorded that it changed it in sm.conf;
+# sm_WCP.conf's reset_board belongs to the wireless-CarPlay kit and stays
+# as it is. One install/rollback at a time (/tmp/vietnav.lock).
 #
 # /data_persist/oem-aa-mod and /data_persist/cp-hud-mod stay on the unit
 # (inert without the LD_PRELOAD lines; delete by hand for the space).
@@ -22,7 +25,7 @@ TARGET=""
 for a in "$@"; do
     case "$a" in
         aa|cp|all) TARGET=$a ;;
-        -h|--help) sed -n '2,18p' "$0" | sed 's/^#//; s/^ //'; exit 0 ;;
+        -h|--help) awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *)         echo "unknown option: $a (use: aa | cp | all)" >&2; exit 2 ;;
     esac
 done
@@ -43,31 +46,61 @@ AA_L2='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/o
 CP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>'
 CP_L2='            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
 
-WD=0; RW=0
+LOCK=/tmp/vietnav.lock
+WD=0; RW=0; LOCKED=0
 log() { echo "$TAG $*" | tee -a "$LOG"; }
 die() { log "ERROR: $*"; exit 1; }
 finish() {
     [ "$WD" = 1 ] && echo 0 > "$WDOG" 2>/dev/null
-    if [ "$RW" = 1 ]; then sync; mount -o remount,ro / 2>/dev/null; fi
+    if [ "$RW" = 1 ]; then
+        sync
+        mount -o remount,ro / 2>/dev/null \
+            || log "WARN: / did not go back to read-only (busy?) - it will at the next start"
+    fi
+    [ "$LOCKED" = 1 ] && rm -rf "$LOCK"
     cp "$LOG" "$HERE/vietnav-rollback.log" 2>/dev/null
     sync
 }
 trap finish EXIT
+
+# one install/rollback at a time (shared with vietnav-install.sh)
+lock() {
+    if ! mkdir "$LOCK" 2>/dev/null; then
+        _p=$(cat "$LOCK/pid" 2>/dev/null)
+        if [ -n "$_p" ] && kill -0 "$_p" 2>/dev/null; then
+            die "another vietnav install/rollback is running (pid $_p) - nothing changed"
+        fi
+        rm -rf "$LOCK"                        # left by a run that was killed
+        mkdir "$LOCK" 2>/dev/null || die "cannot take the lock $LOCK - nothing changed"
+    fi
+    echo $$ > "$LOCK/pid"
+    LOCKED=1
+}
 want() { [ "$TARGET" = "all" ] || [ "$TARGET" = "$1" ]; }
 
 : > "$LOG" 2>/dev/null || LOG=/dev/null
 mount -o rw,remount "$HERE" 2>/dev/null || true      # the stick, for the log copy
 [ "$(id -u)" = "0" ] || die "must run as root"
 [ -f "$SM" ] || die "not a CMU (no $SM)"
+lock
 if [ -e "$WDOG" ]; then echo 1 > "$WDOG" 2>/dev/null && WD=1; fi
 mount -o remount,rw / || die "remount rw of / failed - nothing changed"
 RW=1
 
+# --- ours_in <conf> <service> <line>: how many times <line> is in that block -----
+ours_in() {
+    awk -v svc="name=\"$2\"" -v l="$3" '
+        /<service[ \t]/ && index($0, svc) { on = ($0 !~ /\/>[ \t]*$/); next }
+        on && /<\/service>/ { on = 0 }
+        on && $0 == l { n++ }
+        END { print n + 0 }' "$1"
+}
+
 # --- strip_env <conf> <service> <line1> [line2] ------------------------------------
-# Removes our exact lines from the conf (only directly under that service's
-# <service> line, where the install put them) and, for sm.conf, puts back a
-# reset_board the install recorded. Commits only when the result is the
-# current file minus exactly those lines.
+# Removes our exact lines from that service's block in the conf - wherever
+# they sit in it - and, for sm.conf, puts back a reset_board the install
+# recorded. Commits only when the result is the current file minus exactly
+# those lines and none of ours is left in the block.
 strip_env() {
     _conf=$1; _svc=$2; _l1=$3; _l2=${4:-}
     [ -f "$_conf" ] || return 0
@@ -77,12 +110,13 @@ strip_env() {
     fi
     _new="$_conf.vietnav-new"
     awk -v svc="name=\"$_svc\"" -v l1="$_l1" -v l2="$_l2" -v rb="$_rb" '
-        in_svc && ($0 == l1 || (l2 != "" && $0 == l2)) { n++; next }
-        { in_svc = 0 }
         /<service[ \t]/ && index($0, svc) {
             if (rb == "yes") sub(/reset_board="no"/, "reset_board=\"yes\"")
-            in_svc = 1
+            on = ($0 !~ /\/>[ \t]*$/)
+            print; next
         }
+        on && /<\/service>/ { on = 0 }
+        on && ($0 == l1 || (l2 != "" && $0 == l2)) { n++; next }
         { print }
         END { print n + 0 > "/tmp/vietnav.removed" }' "$_conf" > "$_new" \
         || { rm -f "$_new"; die "awk failed on $_conf"; }
@@ -94,8 +128,8 @@ strip_env() {
         return 0
     fi
     _old=$(wc -l < "$_conf"); _cnt=$(wc -l < "$_new")
-    # line 1 is ours alone (it names our .so), so none may be left anywhere
-    if [ "$_cnt" = "$((_old - _n))" ] && ! grep -q -x -F -e "$_l1" "$_new"; then
+    # line 1 is ours alone (it names our .so): none may be left in the block
+    if [ "$_cnt" = "$((_old - _n))" ] && [ "$(ours_in "$_new" "$_svc" "$_l1")" = 0 ]; then
         mv -f "$_new" "$_conf" || { rm -f "$_new"; die "could not replace $_conf"; }
         sync
         log "$(basename "$_conf"): $_svc -$_n line(s) ($_old->$_cnt)$([ $_rb = yes ] && echo ', reset_board back to yes')"

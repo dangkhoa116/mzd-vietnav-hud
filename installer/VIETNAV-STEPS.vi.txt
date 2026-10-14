@@ -13,9 +13,11 @@ CAI DAT (bam cam ung, khong can ban phim)
   2. Cam dia USB. May hoi cap nhat sau vai giay.
   3. Bam CAI DAT. Menu VIETNAV HUD hien len (trang thai o tren, song ngu
      Viet / Anh):
-       CAI DAT   -> chon: AA / CARPLAY / CA HAI (ca hai)
+       CAI DAT   -> chon: AA / CARPLAY / CA HAI (ca hai), roi bam CAI DAT
+                    lan nua de xac nhan (HUY = khong doi gi)
        THU THAP  -> ghi vietnav-collect-<ngay>.tgz ra dia USB
-       GO BO     -> (khi da cai) go bo phan da cai
+       GO BO     -> (khi da cai) bam GO BO lan nua de xac nhan, roi go
+                    phan da cai
   4. Sau CAI DAT:
        AA:      cam dien thoai Android, mo dan duong
        CARPLAY: ket noi iPhone, mo dan duong (Apple Maps hoac
@@ -63,5 +65,8 @@ LUU Y
   * Neu block jciCARPLAY/jciAAPA/aap_service da co environ_var cua mod khac:
     installer DUNG truoc khi doi bat cu gi va ghi ro trong log - xu ly mod
     kia truoc.
+  * File payload sai md5 (USB hong) cung lam installer DUNG truoc khi doi
+    gi: xay lai USB. Neu dang ghi ma loi giua chung, installer tra lai
+    moi thu no da doi.
   * Ben CarPlay, qua trinh cai dat dat NaviSupported=TRUE (de iPhone gui
     du lieu dan duong iAP2); go bo chi tra ve FALSE neu truoc do la FALSE.

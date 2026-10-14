@@ -19,9 +19,15 @@
 #         iAP2 maneuver stream), service restart.
 #
 # Living next to the other kits on this car:
-#   - every check runs BEFORE anything is written: a service block that
-#     already carries an environ_var from another mod stops the whole
-#     install, so the unit is never left half-installed;
+#   - every check runs BEFORE anything is written: a payload file whose md5
+#     is not the one in vietnav-payload/PAYLOAD-SOURCES.md, or a service
+#     block that already carries an environ_var from another mod, stops the
+#     whole install with nothing changed;
+#   - if a write fails half-way, everything this run changed in the sm
+#     configs, /etc and its own records is put back from the copies it took
+#     just before (/data_persist/vietnav/txn), so the unit is never left
+#     half-installed;
+#   - one run at a time: install and rollback share a lock (/tmp/vietnav.lock);
 #   - it adds lines only; reset_board="no" is set on the touched services
 #     (a crashing shim must not boot-loop the unit) and recorded, so the
 #     rollback can put back exactly what it changed in sm.conf. sm_WCP.conf's
@@ -42,7 +48,7 @@ for a in "$@"; do
     case "$a" in
         aa|cp|all) TARGET=$a ;;
         --yes)     GO=1 ;;
-        -h|--help) sed -n '2,36p' "$0" | sed 's/^#//; s/^ //'; exit 0 ;;
+        -h|--help) awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *)         echo "unknown option: $a (use: aa | cp | all, --yes)" >&2; exit 2 ;;
     esac
 done
@@ -65,22 +71,98 @@ AA_L2='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/o
 CP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>'
 CP_L2='            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
 
-WD=0; RW=0
+TXN=$STATE/txn
+LOCK=/tmp/vietnav.lock
+WD=0; RW=0; LOCKED=0; APPLYING=0; DONE=0
 log() { echo "$TAG $*" | tee -a "$LOG"; }
 die() { log "ERROR: $*"; exit 1; }
 finish() {
+    if [ "$APPLYING" = 1 ] && [ "$DONE" != 1 ]; then undo_apply; fi
     [ "$WD" = 1 ] && echo 0 > "$WDOG" 2>/dev/null
-    if [ "$RW" = 1 ]; then sync; mount -o remount,ro / 2>/dev/null; fi
+    if [ "$RW" = 1 ]; then
+        sync
+        mount -o remount,ro / 2>/dev/null \
+            || log "WARN: / did not go back to read-only (busy?) - it will at the next start"
+    fi
+    [ "$LOCKED" = 1 ] && rm -rf "$LOCK"
     cp "$LOG" "$HERE/vietnav-install.log" 2>/dev/null
     sync
 }
 trap finish EXIT
+
+# one install/rollback at a time (the touch trigger can fire more than once)
+lock() {
+    if ! mkdir "$LOCK" 2>/dev/null; then
+        _p=$(cat "$LOCK/pid" 2>/dev/null)
+        if [ -n "$_p" ] && kill -0 "$_p" 2>/dev/null; then
+            die "another vietnav install/rollback is running (pid $_p) - nothing changed"
+        fi
+        rm -rf "$LOCK"                        # left by a run that was killed
+        mkdir "$LOCK" 2>/dev/null || die "cannot take the lock $LOCK - nothing changed"
+    fi
+    echo $$ > "$LOCK/pid"
+    LOCKED=1
+}
+
+# snap <file>...: keep a copy (or a note that it did not exist) so a failed
+# apply can put it back
+snap() {
+    for _f in "$@"; do
+        _k=$(echo "$_f" | tr '/' '%')
+        if [ -f "$_f" ]; then
+            cp -a "$_f" "$TXN/$_k" || die "copy of $_f before the change failed - nothing changed"
+        else
+            : > "$TXN/$_k.absent"
+        fi
+        echo "$_f" >> "$TXN/list"
+    done
+}
+undo_apply() {             # from the EXIT trap: log only, never die here
+    log "the install stopped half-way - putting back what it changed"
+    _bad=0
+    while read -r _f; do
+        _k=$(echo "$_f" | tr '/' '%')
+        if [ -f "$TXN/$_k" ]; then
+            if cmp -s "$TXN/$_k" "$_f"; then continue; fi
+            if cp -a "$TXN/$_k" "$_f.vietnav-new" && mv -f "$_f.vietnav-new" "$_f"; then
+                log "  put back $_f"
+            else
+                rm -f "$_f.vietnav-new"; _bad=1; log "  COULD NOT put back $_f (copy kept in $TXN)"
+            fi
+        elif [ -f "$TXN/$_k.absent" ] && [ -e "$_f" ]; then
+            rm -f "$_f" && log "  removed $_f" || { _bad=1; log "  COULD NOT remove $_f"; }
+        fi
+    done < "$TXN/list"
+    sync
+    if [ "$_bad" = 0 ]; then
+        rm -rf "$TXN"; log "  the unit is as it was before this run"
+    else
+        log "  NOT everything could be put back - bring the logs home before driving on it"
+    fi
+}
+
+# verify <file>...: each payload file must have the md5 build-kit recorded
+SUMS="$PAYLOAD/PAYLOAD-SOURCES.md"
+verify() {
+    [ -f "$SUMS" ] || die "vietnav-payload/PAYLOAD-SOURCES.md missing - rebuild the stick, nothing changed"
+    command -v md5sum >/dev/null 2>&1 || die "no md5sum on this unit - cannot check the payload, nothing changed"
+    for _f in "$@"; do
+        _want=$(awk -F'|' -v f="$_f" '{ n = $2; m = $3; gsub(/[ `]/, "", n); gsub(/[ `]/, "", m) }
+                                      n == f { print m; exit }' "$SUMS")
+        [ -n "$_want" ] || die "no checksum for $_f in PAYLOAD-SOURCES.md - rebuild the stick, nothing changed"
+        _got=$(md5sum "$PAYLOAD/$_f" | cut -d' ' -f1)
+        [ "$_got" = "$_want" ] \
+            || die "vietnav-payload/$_f is damaged (md5 $_got, expected $_want) - rebuild the stick, nothing changed"
+    done
+    log "  payload md5 ok: $*"
+}
 want() { [ "$TARGET" = "all" ] || [ "$TARGET" = "$1" ]; }
 
 : > "$LOG" 2>/dev/null || LOG=/dev/null
 mount -o rw,remount "$HERE" 2>/dev/null || true      # the stick, for the log copy
 [ "$(id -u)" = "0" ] || die "must run as root"
 [ -f "$SM" ] || die "not a CMU (no $SM)"
+[ "$GO" = 1 ] && lock
 
 FW=$(sed -n 's/^JCI_SW_VER=//p' /jci/version.ini 2>/dev/null | tr -d '"\r')
 log "target=$TARGET dry-run=$([ $GO = 1 ] && echo no || echo yes) firmware=${FW:-unknown}"
@@ -179,6 +261,9 @@ if want aa; then
         [ -f "$PAYLOAD/$f" ] || die "missing payload file: vietnav-payload/$f (rebuild the stick)"
     done
     log "--- Android Auto (oem-aa-mod) ---"
+    verify libpatch-blmjciaapa.so libpatch-aap_service.so libpatch.conf \
+           aap_system_attributes.xml aap_system_attributes_UCP.xml
+    [ -f "$PAYLOAD/libpatch-svcjcinavi.so" ] && verify libpatch-svcjcinavi.so
     for c in $CONFS; do
         plan_svc "$c" jciAAPA "$AA_L1"
         plan_svc "$c" aap_service "$AA_L2"
@@ -188,6 +273,7 @@ if want cp; then
     [ -f "$PAYLOAD/libpatch-blmjcicarplay.so" ] \
         || die "missing payload file: vietnav-payload/libpatch-blmjcicarplay.so (rebuild the stick)"
     log "--- CarPlay bridge (mazda-carplay-hud) ---"
+    verify libpatch-blmjcicarplay.so
     for c in $CONFS; do
         plan_svc "$c" jciCARPLAY "$CP_L1" "$CP_L2"
     done
@@ -213,6 +299,19 @@ mkdir -p "$STATE" || die "cannot create $STATE"
 if [ -e "$WDOG" ]; then echo 1 > "$WDOG" 2>/dev/null && WD=1; fi
 mount -o remount,rw / || die "remount rw of / failed - nothing changed"
 RW=1
+
+# copies of everything the apply may change, for undo_apply
+rm -rf "$TXN"; mkdir -p "$TXN" || die "cannot create $TXN - nothing changed"
+: > "$TXN/list"
+for c in $CONFS; do snap "$c"; done
+snap "$STATE/reset_board" "$STATE/navisupported"
+if want aa; then
+    for XML in aap_system_attributes.xml aap_system_attributes_UCP.xml; do
+        snap "/etc/$XML" "/etc/$XML.orig"
+    done
+fi
+want cp && snap "$MASTER"
+APPLYING=1
 
 if want aa; then
     mkdir -p "$AA_DIR" || die "cannot mkdir $AA_DIR"
@@ -279,6 +378,8 @@ if want cp && [ -f "$MASTER" ]; then
     fi
 fi
 sync
+DONE=1                     # every write is in: nothing below can undo them
+rm -rf "$TXN"
 
 restart_svc() {
     if smctl -r -n "$1" >/dev/null 2>&1; then

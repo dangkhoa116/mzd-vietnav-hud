@@ -10,8 +10,10 @@
 # WHAT IT DOES
 #   Menu (3 buttons; screens in Vietnamese / English, with the status
 #   and the dangkhoa116 credit):
-#     CAI DAT  -> which target? AA / CARPLAY / CA HAI (what the payload has)
-#     GO BO    -> (when installed) removes the installed target(s)
+#     CAI DAT  -> which target? AA / CARPLAY / CA HAI (what the payload has),
+#                 then CAI DAT / HUY to confirm
+#     GO BO    -> (when installed) GO BO / HUY to confirm, then removes the
+#                 installed target(s)
 #     THU THAP -> vietnav-collect.sh (read-only diagnostics pack)
 #   It runs the same vietnav-install.sh --yes / vietnav-rollback.sh as the
 #   terminal; they log to the stick (vietnav-install.log, -rollback.log),
@@ -48,6 +50,11 @@ ask3() { # ask3 <title> <text> <ok> <cancel> <b3> -> exit code
     "$DIALOG" --3-button-dialog --title="$1" --text="$2" \
         --ok-label="$3" --cancel-label="$4" --button3-label="$5" \
         > /dev/null 2>&1
+}
+ask2() {         # ask2 <title> <text> <ok> <cancel> -> exit code
+    killall -q jci-dialog 2>/dev/null || true
+    "$DIALOG" --question --title="$1" --text="$2" \
+        --ok-label="$3" --cancel-label="$4" > /dev/null 2>&1
 }
 say() {          # final message, one OK button, waits for the tap
     killall -q jci-dialog 2>/dev/null || true
@@ -135,6 +142,9 @@ if [ -z "$INST" ]; then
         say "KHONG CO PAYLOAD / NO PAYLOAD\n\nThieu file .so / missing .so files\nXay lai USB / rebuild the stick: build-kit.py\nTHU THAP van dung duoc / logs still work"
         exit 0
     fi
+    # nothing is changed before this second tap
+    ask2 "VIETNAV HUD" "CAI DAT `tname $T`?\nInstall `tname $T`?\n\nHUY = cancel" "CAI DAT" "HUY"
+    [ "$?" = 0 ] || { log "install not confirmed"; exit 0; }
     log "install: $T"
     popup "Dang cai dat `tname $T`... Dung rut USB.\nInstalling `tname $T`... do not remove the USB."
     if sh "$HERE/vietnav-install.sh" "$T" --yes; then
@@ -149,6 +159,8 @@ else
         aa) T=aa ;;
         cp) T=cp ;;
     esac
+    ask2 "VIETNAV HUD" "GO BO `tname $T`?\nRemove `tname $T`?\n\nHUY = cancel" "GO BO" "HUY"
+    [ "$?" = 0 ] || { log "rollback not confirmed"; exit 0; }
     log "rollback: $T"
     popup "Dang go `tname $T`... Dung rut USB.\nRemoving `tname $T`... do not remove the USB."
     if sh "$HERE/vietnav-rollback.sh" "$T"; then
