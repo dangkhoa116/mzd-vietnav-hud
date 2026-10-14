@@ -35,9 +35,12 @@ NEU KHONG THAY HOP THOAI CAP NHAT
       sh /tmp/mnt/sda1/vietnav-install.sh cp --yes      (chi CarPlay)
       sh /tmp/mnt/sda1/vietnav-install.sh all --yes     (ca hai)
 
-BUOI THU THAP (nen lam ngay lan dau)
-  * Bam THU THAP va giu file .tgz - co firmware + sm.conf + XML AAP,
-    quyet dinh cac cau mo (ho tro 74.00.331, nguon ten duong).
+THU THAP (chi khi co loi)
+  * Khong can lam truoc khi cai: installer tu kiem tra may va DUNG truoc
+    khi doi gi neu thay dieu bat thuong.
+  * Neu CAI DAT bao loi hoac HUD khong hien, bam THU THAP roi gui file
+    .tgz (firmware + sm.conf + XML AAP) kem cac file vietnav-*.log tren
+    dia USB.
 
 GO BO
   * Cung menu, bam GO BO. Neu mot dich vu khong khoi dong lai duoc thi

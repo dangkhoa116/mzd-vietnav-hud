@@ -35,10 +35,12 @@ IF NO DIALOG APPEARS
       sh /tmp/mnt/sda1/vietnav-install.sh cp --yes      (CarPlay bridge only)
       sh /tmp/mnt/sda1/vietnav-install.sh all --yes     (both)
 
-DIAGNOSTICS SESSION (recommended first visit)
-  * Tap THU THAP and keep the .tgz - it carries firmware + sm.conf + the
-    AAP XMLs, which decide the open questions (74.00.331 support, street
-    name source).
+THU THAP (only when something goes wrong)
+  * Not needed before installing: the installer checks the unit itself and
+    stops before any change if something does not look right.
+  * If CAI DAT fails or the HUD stays blank, tap THU THAP and send the
+    .tgz (firmware + sm.conf + the AAP XMLs) together with the
+    vietnav-*.log files from the stick.
 
 UNINSTALL
   * Same menu, GO BO. A power cycle finishes it if smctl could not

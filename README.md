@@ -176,7 +176,7 @@ undoes another's.
 - [x] Host checks: 87 checks against a fake CMU, including the install/rollback
       round trip on the car's own sm configs and every dialog checked against
       what the car's jci-dialog binary really shows
-- [ ] On-car session: THU THAP (collect) first, then AA, then CarPlay — confirm
+- [ ] On-car session: AA, then CarPlay (THU THAP only if one fails) — confirm
       on FW 74.00.331 and read the street-name behaviour with VIETMAP LIVE
       (`road="--"` would close hypothesis H1; needs the debug build)
 - [ ] Build the patched AA binaries (road budget 64→256) with the m3 toolchain;

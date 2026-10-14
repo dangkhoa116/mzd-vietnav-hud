@@ -166,7 +166,7 @@ nhau, không kit nào làm hỏng phần của kit khác.
 - [x] Kiểm tra trên máy: 87 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
       chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
       gì binary jci-dialog của xe thật sự hiển thị được
-- [ ] Buổi chạy xe: THU THAP trước, rồi AA, rồi CarPlay — xác nhận trên
+- [ ] Buổi chạy xe: AA, rồi CarPlay (chỉ THU THAP khi có lỗi) — xác nhận trên
       74.00.331 và đọc hành vi tên đường với VIETMAP LIVE (`road="--"` sẽ chốt
       giả thuyết H1; cần bản build debug)
 - [ ] Build binary AA đã vá (road budget 64→256) bằng m3 toolchain; kit hiện ship
