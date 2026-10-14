@@ -163,6 +163,12 @@ undoes another's.
   any write. A write that fails half-way puts back everything that run changed
   (sm configs, `/etc`, its own records) from copies taken just before. One
   install/rollback at a time (`/tmp/vietnav.lock`).
+- **Only on checked builds.** The shims hook fixed places in the unit's own
+  `blmjciaapa.so`, `aap_service`, `blmjcicarplay.so` and
+  `libdevmgr_interface.so`. The install checks their md5 first and goes ahead
+  only on the builds the mods were checked on (74.00.324A, byte-identical on
+  74.00.331); anything else stops with nothing changed and the touch menu
+  says KHONG HO TRO / NOT SUPPORTED.
 
 ## Status & roadmap
 
@@ -173,7 +179,7 @@ undoes another's.
 - [x] Touch install kit for VN firmware (74.00.331): AA mod + CarPlay bridge on
       one TouchTune stick, with rollback and a diagnostics collect mode; the
       shared launcher coexists with the TPMS and wireless-CarPlay kits
-- [x] Host checks: 87 checks against a fake CMU, including the install/rollback
+- [x] Host checks: 98 checks against a fake CMU, including the install/rollback
       round trip on the car's own sm configs and every dialog checked against
       what the car's jci-dialog binary really shows
 - [ ] On-car session: AA, then CarPlay (THU THAP only if one fails) — confirm

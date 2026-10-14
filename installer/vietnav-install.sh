@@ -23,6 +23,10 @@
 #     is not the one in vietnav-payload/PAYLOAD-SOURCES.md, or a service
 #     block that already carries an environ_var from another mod, stops the
 #     whole install with nothing changed;
+#   - the unit's binaries the shims hook into (blmjciaapa.so, aap_service,
+#     blmjcicarplay.so, libdevmgr_interface.so) must be the builds the mods
+#     were checked on (74.00.324A = 74.00.331, by md5); any other build
+#     exits 3 with nothing changed;
 #   - if a write fails half-way, everything this run changed in the sm
 #     configs, /etc and its own records is put back from the copies it took
 #     just before (/data_persist/vietnav/txn), so the unit is never left
@@ -70,6 +74,16 @@ AA_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/o
 AA_L2='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-aap_service.so"/>'
 CP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>'
 CP_L2='            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
+
+# The unit's own binaries the shims hook into. The shims patch fixed places
+# in them (the aap_service shim calls addresses inside aap_service; the
+# CarPlay bridge reads the message layout of the 74.00.324A ipoddev), so
+# they install only on these builds - byte-identical on 74.00.324A (EU) and
+# 74.00.331 (ADR). Any other build: nothing is changed, exit 3.
+AA_HOSTS="/jci/aapa/blmjciaapa.so=486628ae7b5be7c80527968a0b85ae38
+/usr/bin/aap_service=964e9af092d8ef2d0eddcd881b26c0e2"
+CP_HOSTS="/jci/carplay/blmjcicarplay.so=0a4e3a67de3d6499a4d537c66bf30ff9
+/usr/lib/libdevmgr_interface.so=e914face2f2f93d0928a7e132a04f9d8"
 
 TXN=$STATE/txn
 LOCK=/tmp/vietnav.lock
@@ -156,6 +170,18 @@ verify() {
     done
     log "  payload md5 ok: $*"
 }
+# host_check <path=md5 lines>: the unit's binaries must be a checked build
+host_check() {
+    for _h in $1; do
+        _f=${_h%%=*}; _want=${_h#*=}
+        [ -f "$_f" ] || unsupported "$_f is not on this unit"
+        _got=$(md5sum "$_f" | cut -d' ' -f1)
+        [ "$_got" = "$_want" ] \
+            || unsupported "$_f is a build this mod was not checked on (md5 $_got)"
+        log "  unit binary ok: $_f"
+    done
+}
+unsupported() { log "ERROR: $* - nothing changed (checked: 74.00.324A / 74.00.331)"; exit 3; }
 want() { [ "$TARGET" = "all" ] || [ "$TARGET" = "$1" ]; }
 
 : > "$LOG" 2>/dev/null || LOG=/dev/null
@@ -166,7 +192,7 @@ mount -o rw,remount "$HERE" 2>/dev/null || true      # the stick, for the log co
 
 FW=$(sed -n 's/^JCI_SW_VER=//p' /jci/version.ini 2>/dev/null | tr -d '"\r')
 log "target=$TARGET dry-run=$([ $GO = 1 ] && echo no || echo yes) firmware=${FW:-unknown}"
-log "  (AA binaries are identical on 74.00.324A and .331; the CarPlay bridge is unverified on .331)"
+log "  (the shims install only on the unit binaries checked on 74.00.324A / .331)"
 
 # --- what is in one <service> block ----------------------------------------------
 # svc_state <conf> <service> <our-line1> [our-line2] -> prints one of
@@ -264,6 +290,7 @@ if want aa; then
     verify libpatch-blmjciaapa.so libpatch-aap_service.so libpatch.conf \
            aap_system_attributes.xml aap_system_attributes_UCP.xml
     [ -f "$PAYLOAD/libpatch-svcjcinavi.so" ] && verify libpatch-svcjcinavi.so
+    host_check "$AA_HOSTS"
     for c in $CONFS; do
         plan_svc "$c" jciAAPA "$AA_L1"
         plan_svc "$c" aap_service "$AA_L2"
@@ -274,6 +301,7 @@ if want cp; then
         || die "missing payload file: vietnav-payload/libpatch-blmjcicarplay.so (rebuild the stick)"
     log "--- CarPlay bridge (mazda-carplay-hud) ---"
     verify libpatch-blmjcicarplay.so
+    host_check "$CP_HOSTS"
     for c in $CONFS; do
         plan_svc "$c" jciCARPLAY "$CP_L1" "$CP_L2"
     done

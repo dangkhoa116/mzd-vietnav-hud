@@ -90,6 +90,13 @@ tname() {        # aa | cp | all -> what the screen says
 
 INST=""; aa_installed && INST="aa"; cp_installed && INST="${INST}${INST:+ }cp"
 log "installed: ${INST:-none}"
+# which running services have a shim loaded (after the power cycle: all of
+# jciAAPA, aap_service, jciCARPLAY that were installed) - log only
+for _m in /proc/[0-9]*/maps; do
+    grep -q 'libpatch-' "$_m" 2>/dev/null || continue
+    _p=${_m%/maps}
+    log "shim running in pid ${_p#/proc/}: $(tr '\000' ' ' < "$_p/cmdline" 2>/dev/null | cut -c1-90)"
+done
 
 case "$INST" in
     "aa cp") ST="DA CAI AA + CARPLAY / installed" ;;
@@ -148,7 +155,9 @@ if [ -z "$INST" ]; then
     log "install: $T"
     popup "Dang cai dat `tname $T`... Dung rut USB.\nInstalling `tname $T`... do not remove the USB."
     if sh "$HERE/vietnav-install.sh" "$T" --yes; then
-        say "DA CAI / INSTALLED: `tname $T`\nMo dan duong tren dien thoai, xem tren HUD.\nStart navigation on the phone, see the HUD.\nLog: vietnav-install.log\n$CREDIT"
+        say "DA CAI / INSTALLED: `tname $T`\nTat may, doi 10 phut, roi mo dan duong.\nPower-cycle the car, then start navigation.\nLog: vietnav-install.log\n$CREDIT"
+    elif [ "$?" = 3 ]; then
+        say "KHONG HO TRO / NOT SUPPORTED\nPhan mem xe nay chua duoc kiem tra.\nThis unit's software was not tested.\nKhong thay doi gi / nothing changed.\nLog: vietnav-install.log"
     else
         say "CAI DAT LOI / INSTALL FAILED\n\nMang USB ve, xem / bring the USB home, see:\nvietnav-install.log"
     fi

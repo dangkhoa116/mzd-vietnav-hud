@@ -18,7 +18,9 @@ INSTALL (touch, no keyboard)
        THU THAP  -> writes vietnav-collect-<date>.tgz to the stick
        GO BO     -> (when installed) GO BO again to confirm, then removes
                     what is installed
-  4. After CAI DAT:
+  4. After CAI DAT, power-cycle the car once: ignition off, lock it, wait
+     about 10 minutes, start it again. The iPhone is only told the car
+     takes navigation (NaviSupported) on a fresh start. Then:
        AA:      plug in an Android phone, start navigation
        CARPLAY: connect an iPhone, start navigation (Apple Maps or
                 VIETMAP LIVE)
@@ -66,6 +68,11 @@ ONE STICK, SEVERAL KITS
     "CHUA CAI" again: tap CAI DAT to put the HUD lines back.
 
 NOTES
+  * KHONG HO TRO / NOT SUPPORTED: the unit's own binaries the mods hook
+    into (blmjciaapa.so, aap_service, blmjcicarplay.so,
+    libdevmgr_interface.so) are not the builds the mods were checked on
+    (74.00.324A = 74.00.331). Nothing was changed. THU THAP and bring the
+    stick home.
   * Installing on a unit whose jciCARPLAY/jciAAPA/aap_service block already
     has an environ_var from another mod: the installer STOPS before changing
     anything and says so in the log - sort the other mod out first.

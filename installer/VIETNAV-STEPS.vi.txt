@@ -18,7 +18,9 @@ CAI DAT (bam cam ung, khong can ban phim)
        THU THAP  -> ghi vietnav-collect-<ngay>.tgz ra dia USB
        GO BO     -> (khi da cai) bam GO BO lan nua de xac nhan, roi go
                     phan da cai
-  4. Sau CAI DAT:
+  4. Sau CAI DAT, khoi dong lai xe mot lan: tat may, khoa xe, doi khoang
+     10 phut, no may lai. iPhone chi biet xe nhan dan duong
+     (NaviSupported) sau mot lan khoi dong moi. Roi:
        AA:      cam dien thoai Android, mo dan duong
        CARPLAY: ket noi iPhone, mo dan duong (Apple Maps hoac
                 VIETMAP LIVE)
@@ -65,6 +67,10 @@ MOT DIA, NHIEU KIT
     "CHUA CAI" lai: bam CAI DAT de dua dong HUD tro lai.
 
 LUU Y
+  * KHONG HO TRO / NOT SUPPORTED: cac file goc cua xe ma mod moc vao
+    (blmjciaapa.so, aap_service, blmjcicarplay.so, libdevmgr_interface.so)
+    khong phai ban da kiem tra (74.00.324A = 74.00.331). Xe khong bi doi
+    gi. Bam THU THAP va mang USB ve.
   * Neu block jciCARPLAY/jciAAPA/aap_service da co environ_var cua mod khac:
     installer DUNG truoc khi doi bat cu gi va ghi ro trong log - xu ly mod
     kia truoc.

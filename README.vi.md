@@ -153,6 +153,12 @@ nhau, không kit nào làm hỏng phần của kit khác.
   đang ghi mà lỗi giữa chừng, mọi thứ lần chạy đó đã đổi (sm config, `/etc`,
   bản ghi của kit) được trả lại từ bản sao chụp ngay trước đó. Mỗi lúc chỉ
   một lần cài/gỡ chạy (`/tmp/vietnav.lock`).
+- **Chỉ cài trên bản đã kiểm tra.** Các shim móc vào chỗ cố định trong
+  `blmjciaapa.so`, `aap_service`, `blmjcicarplay.so` và
+  `libdevmgr_interface.so` của xe. Bộ cài kiểm tra md5 các file này trước, chỉ
+  cài khi đúng bản đã kiểm tra (74.00.324A, giống hệt từng byte trên
+  74.00.331); bản khác thì dừng, không đổi gì, và menu cảm ứng báo
+  KHONG HO TRO / NOT SUPPORTED.
 
 ## Trạng thái & lộ trình
 
@@ -163,7 +169,7 @@ nhau, không kit nào làm hỏng phần của kit khác.
 - [x] Bộ cài chạm cho firmware VN (74.00.331): AA mod + CarPlay bridge cùng một
       dia TouchTune, có gỡ cài và chế độ thu thập chẩn đoán; launcher dùng
       chung sống cùng kit TPMS và kit CarPlay không dây
-- [x] Kiểm tra trên máy: 87 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
+- [x] Kiểm tra trên máy: 98 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
       chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
       gì binary jci-dialog của xe thật sự hiển thị được
 - [ ] Buổi chạy xe: AA, rồi CarPlay (chỉ THU THAP khi có lỗi) — xác nhận trên

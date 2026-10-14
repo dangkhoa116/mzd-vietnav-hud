@@ -50,6 +50,21 @@ ps 2>/dev/null | grep -E "aap|AAPA|blmj|jcinavi|jciCARPLAY|sm -f" | grep -v grep
     if grep -q "tpms-boot" /jci/scripts/stage_wifi.sh 2>/dev/null; then echo "TPMS boot hook: installed"; else echo "TPMS boot hook: no"; fi
 } > "$STAGE/other-kits.txt"
 mount | grep -E "/mnt/sd|data_persist" > "$STAGE/mounts.txt"
+# is each shim running, and in which process
+for _m in /proc/[0-9]*/maps; do
+    grep -q 'libpatch-' "$_m" 2>/dev/null || continue
+    _p=${_m%/maps}
+    echo "pid ${_p#/proc/}: $(tr '\000' ' ' < "$_p/cmdline" 2>/dev/null) :: $(grep -o 'libpatch-[A-Za-z0-9_]*\.so' "$_m" | sort -u | tr '\n' ' ')"
+done > "$STAGE/shims-running.txt" 2>/dev/null
+# the unit binaries the shims hook into (the installer only accepts the
+# 74.00.324A/.331 builds) and the iAP2 producer the CarPlay bridge reads
+md5sum /jci/aapa/blmjciaapa.so /usr/bin/aap_service /jci/carplay/blmjcicarplay.so \
+    /usr/lib/libdevmgr_interface.so /usr/bin/ipoddev_full_auth > "$STAGE/unit-md5.txt" 2>&1
+grab /usr/bin/ipoddev_full_auth           ipoddev_full_auth
+grab /tmp/devmgr_config_edit.xml          devmgr_config_edit.xml
+# what the shims and the services said (release shims log errors only)
+dmesg 2>/dev/null | tail -n 300 > "$STAGE/dmesg-tail.txt"
+grep -r -h -e 'libpatch-' -e 'carplay_bridge' /var/log /tmp/*.log 2>/dev/null | tail -n 500 > "$STAGE/shim-log-lines.txt"
 # anything the debug build already logged (nav16 frames, bridge logs)
 for f in /tmp/*nav16* /tmp/carplay_bridge.log /tmp/vietnav-install.log /tmp/vietnav-rollback.log; do
     [ -e "$f" ] && cp -a "$f" "$STAGE/" 2>/dev/null

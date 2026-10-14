@@ -99,7 +99,7 @@ STUB = '#!/bin/sh\necho "%s $*" >> "@T@/stub.log"\n%s\n'
 
 
 def rewrite(text, t):
-    for a in ("/jci/", "/etc/", "/data_persist", "/tmp/", "/sys/class/gpio"):
+    for a in ("/jci/", "/etc/", "/usr/", "/data_persist", "/tmp/", "/sys/class/gpio"):
         text = text.replace(a, "@T@" + a)
     text = text.replace("-C /tmp ", "-C @T@/tmp ")
     return text.replace("@T@", t)
@@ -108,6 +108,25 @@ def rewrite(text, t):
 def car_line(line, t):
     """One of the install's lines as it reads after the path rewrite."""
     return rewrite(line, t)
+
+
+# The unit binaries the installer checks by md5 before it installs. Made-up
+# bytes stand in for Mazda's files; the installer's md5 list is pointed at
+# them (host_sums), so a test can swap one for "another build".
+HOSTS = {
+    "jci/aapa/blmjciaapa.so": b"\x7fELF blmjciaapa 324A/331",
+    "usr/bin/aap_service": b"\x7fELF aap_service 324A/331",
+    "jci/carplay/blmjcicarplay.so": b"\x7fELF blmjcicarplay 324A/331",
+    "usr/lib/libdevmgr_interface.so": b"\x7fELF libdevmgr_interface 324A/331",
+}
+
+
+def host_sums(text, t):
+    """vietnav-install.sh's unit-binary md5 list, pointed at the fake files."""
+    for rel, body in HOSTS.items():
+        text = re.sub(re.escape(t + "/" + rel) + "=[0-9a-f]{32}",
+                      t + "/" + rel + "=" + hashlib.md5(body).hexdigest(), text)
+    return text
 
 
 class Car:
@@ -139,7 +158,9 @@ class Car:
         for name in ("vietnav-install.sh", "vietnav-rollback.sh", "vietnav-collect.sh",
                      "vietnav-touch.sh", "install-patches.sh"):
             with open(os.path.join(INST, name), encoding="utf-8") as f:
-                self.write("usb/" + name, rewrite(f.read(), self.t).encode())
+                self.write("usb/" + name, host_sums(rewrite(f.read(), self.t), self.t).encode())
+        for rel, body in HOSTS.items():
+            self.write(rel, body)
         self.stub("bin/id", "id", "echo 0")
         self.stub("bin/mount", "mount", '[ -f "@T@/mount-fails" ] && exit 1\n'
                   'case "$*" in *remount,ro*) [ -f "@T@/mount-ro-fails" ] && exit 1 ;; esac\nexit 0')
@@ -492,6 +513,13 @@ def install_tests():
         listing = subprocess.run(["tar", "-tzf", tgz[0]], cwd=os.path.join(c.t, "usb"),
                                  capture_output=True, text=True).stdout
         check("collect: notes the other kits", "other-kits.txt" in listing, listing)
+        check("collect: which shims run, the unit binaries' md5, the shim log lines",
+              all(n in listing for n in ("shims-running.txt", "unit-md5.txt", "shim-log-lines.txt")),
+              listing)
+        md5s = subprocess.run(["tar", "-xzOf", tgz[0], "vietnav-collect/unit-md5.txt"],
+                              cwd=os.path.join(c.t, "usb"), capture_output=True, text=True).stdout
+        check("collect: unit md5 list has the four checked binaries",
+              all(hashlib.md5(HOSTS[r]).hexdigest() in md5s for r in HOSTS), md5s)
 
     # --- real sm configs, when given
     real = os.environ.get("VIETNAV_REAL_SM")
@@ -698,7 +726,7 @@ def touch_tests():
     check("touch: log on the stick", "install: all" in tlog, tlog)
     check("touch: says done, both languages, with the credit",
           "DA CAI / INSTALLED: AA + CARPLAY" in c.stublog()
-          and "Start navigation on the phone" in c.stublog()
+          and "Power-cycle the car, then start navigation" in c.stublog()
           and "- by dangkhoa116 -" in c.stublog(), c.stublog())
     c.write("stub.log", b"")
     c.seq(9)
@@ -764,9 +792,47 @@ def build_kit_tests():
           err is not None and rd(d, "install-patches.sh") == wcp_payload, err)
 
 
+def host_tests():
+    """The shims hook fixed places in the unit's binaries: another build of
+    any of them stops the install (exit 3) before anything is changed."""
+    c = Car(wcp_conf=True)
+    rc, out = c.run("usb/vietnav-install.sh", "all")
+    check("unit check: the checked builds pass (dry run)",
+          rc == 0 and out.count("unit binary ok") == 4, out)
+    for rel, target in (("usr/bin/aap_service", "aa"), ("jci/carplay/blmjcicarplay.so", "cp")):
+        c = Car(wcp_conf=True)
+        c.write(rel, HOSTS[rel] + b" another build")
+        before = c.tree()
+        rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+        check("unit check: another %s -> exit 3, nothing changed" % os.path.basename(rel),
+              rc == 3 and c.tree() == before and "not checked on" in out, out)
+        rc, out = c.run("usb/vietnav-install.sh", target)
+        check("unit check: the dry run (%s) says so too" % target, rc == 3, out)
+        other = "cp" if target == "aa" else "aa"
+        rc, out = c.run("usb/vietnav-install.sh", other)
+        check("unit check: the other mod (%s) still passes its own check" % other, rc == 0, out)
+    c = Car(wcp_conf=True)
+    os.remove(os.path.join(c.t, "usr/lib/libdevmgr_interface.so"))
+    before = c.tree()
+    rc, out = c.run("usb/vietnav-install.sh", "cp", "--yes")
+    check("unit check: a missing libdevmgr_interface.so -> exit 3, nothing changed",
+          rc == 3 and c.tree() == before and "not on this unit" in out, out)
+    # the touch menu tells the driver, in both languages
+    c = Car(wcp_conf=True)
+    c.write("usr/bin/aap_service", b"another build")
+    before = c.tree()
+    c.seq(0, 2, 0, 0)                 # CAI DAT, CA HAI, CAI DAT, OK
+    c.run("usb/install-patches.sh")
+    time.sleep(0.3)
+    log = c.stublog()
+    check("unit check: touch shows KHONG HO TRO / NOT SUPPORTED, nothing changed",
+          "KHONG HO TRO / NOT SUPPORTED" in log and "CAI DAT LOI" not in log and c.tree() == before, log)
+
+
 def main():
     print("shell:", " ".join(SH))
     install_tests()
+    host_tests()
     launcher_tests()
     touch_tests()
     build_kit_tests()
