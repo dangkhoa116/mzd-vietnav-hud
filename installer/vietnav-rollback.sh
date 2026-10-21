@@ -196,5 +196,10 @@ if want cp; then
     restart_svc jciCARPLAY
 fi
 
+# nothing of ours left in the sm configs: no installed version either
+if ! grep -q -e "data_persist/oem-aa-mod/libpatch" -e "data_persist/cp-hud-mod/libpatch" "$SM" "$SMW" 2>/dev/null; then
+    rm -f "$STATE/version"
+fi
+
 log "DONE ($TARGET). /data_persist payload folders were left in place (inert); delete by hand if wanted."
 exit 0

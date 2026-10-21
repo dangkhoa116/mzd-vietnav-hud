@@ -179,7 +179,7 @@ undoes another's.
 - [x] Touch install kit for VN firmware (74.00.331): AA mod + CarPlay bridge on
       one TouchTune stick, with rollback and a diagnostics collect mode; the
       shared launcher coexists with the TPMS and wireless-CarPlay kits
-- [x] Host checks: 98 checks against a fake CMU, including the install/rollback
+- [x] Host checks: 104 checks against a fake CMU, including the install/rollback
       round trip on the car's own sm configs and every dialog checked against
       what the car's jci-dialog binary really shows
 - [ ] On-car session: AA, then CarPlay (THU THAP only if one fails) — confirm
@@ -189,6 +189,16 @@ undoes another's.
       the kit currently ships upstream 0.10.0 binaries, the patch lives in
       [patches/](patches/oem-aa-mod/) as source
 - [ ] Contribute the patch upstream to oem-aa-mod
+
+## Version
+
+`VERSION` holds the version (x.y.z), and each release is tagged `vx.y.z`. The
+touch installer shows the stick's version in its title and the installed one
+in its status line (`DA CAI AA / installed 0.9.0`); every log on the stick
+names it too, and the install records it in `/data_persist/vietnav/version`
+(THU THAP collects it). To bump it, change `VERSION` and `VIETNAV_VERSION` in
+`installer/vietnav-install.sh` together: `build-kit.py` refuses a kit where
+they differ. Cars installed before 0.9.0 show no installed version.
 
 ## License & credits
 

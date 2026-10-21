@@ -235,6 +235,19 @@ def md5(path):
     return h.hexdigest()
 
 
+def version():
+    """VERSION, and the error if vietnav-install.sh does not carry the same one."""
+    with open(os.path.join(REPO, "VERSION")) as f:
+        v = f.read().strip()
+    with open(ROOT_FILES["vietnav-install.sh"], encoding="utf-8") as f:
+        m = re.search(r'^VIETNAV_VERSION="([^"]*)"$', f.read(), re.M)
+    if not re.match(r"^\d+\.\d+\.\d+$", v):
+        return v, "VERSION is %r, not x.y.z" % v
+    if not m or m.group(1) != v:
+        return v, "vietnav-install.sh VIETNAV_VERSION is %s, VERSION is %s" % (m and m.group(1), v)
+    return v, None
+
+
 def main():
     dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "dist")
     payload = payload_map()
@@ -243,6 +256,9 @@ def main():
     errors = [e for name, src in list(ROOT_FILES.items()) + [("install-patches.sh", LAUNCHER)]
               + [(n, s) for n, (s, _) in payload.items()]
               for e in [check(src, name)] if e]
+    ver, err = version()
+    if err:
+        errors.append(err)
     if errors:
         sys.exit("!! " + "\n!! ".join(errors) + "\nnothing written")
     os.makedirs(dest, exist_ok=True)
@@ -311,8 +327,8 @@ def main():
             if attempt == 9:
                 raise
             time.sleep(0.5)
-    print("kit written to %s (%d files + %d payload, AA=%s CP=%s)"
-          % (dest, len(ROOT_FILES) + 1, len(payload) + 1, have_aa, have_cp))
+    print("kit %s written to %s (%d files + %d payload, AA=%s CP=%s)"
+          % (ver, dest, len(ROOT_FILES) + 1, len(payload) + 1, have_aa, have_cp))
 
 
 if __name__ == "__main__":

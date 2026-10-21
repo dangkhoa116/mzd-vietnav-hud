@@ -62,6 +62,9 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || HERE=$(dirname "$0")
 PAYLOAD="$HERE/vietnav-payload"
 LOG=/tmp/vietnav-install.log
 TAG="[vietnav]"
+# The kit version (x.y.z): the same as VERSION in the repo - build-kit.py
+# refuses a kit where they differ. The touch menu reads it from here.
+VIETNAV_VERSION="0.9.0"
 WDOG="/sys/class/gpio/Watchdog Disable/value"
 SM=/jci/sm/sm.conf
 SMW=/jci/sm/sm_WCP.conf
@@ -191,7 +194,7 @@ mount -o rw,remount "$HERE" 2>/dev/null || true      # the stick, for the log co
 [ "$GO" = 1 ] && lock
 
 FW=$(sed -n 's/^JCI_SW_VER=//p' /jci/version.ini 2>/dev/null | tr -d '"\r')
-log "target=$TARGET dry-run=$([ $GO = 1 ] && echo no || echo yes) firmware=${FW:-unknown}"
+log "vietnav $VIETNAV_VERSION target=$TARGET dry-run=$([ $GO = 1 ] && echo no || echo yes) firmware=${FW:-unknown}"
 log "  (the shims install only on the unit binaries checked on 74.00.324A / .331)"
 
 # --- what is in one <service> block ----------------------------------------------
@@ -329,7 +332,7 @@ RW=1
 rm -rf "$TXN"; mkdir -p "$TXN" || die "cannot create $TXN - nothing changed"
 : > "$TXN/list"
 for c in $CONFS; do snap "$c"; done
-snap "$STATE/reset_board" "$STATE/navisupported"
+snap "$STATE/reset_board" "$STATE/navisupported" "$STATE/version"
 if want aa; then
     for XML in aap_system_attributes.xml aap_system_attributes_UCP.xml; do
         snap "/etc/$XML" "/etc/$XML.orig"
@@ -402,6 +405,8 @@ if want cp && [ -f "$MASTER" ]; then
         log "set NaviSupported=TRUE (backup: $MBAK)"
     fi
 fi
+# what is on the car now - the touch menu shows it in its status line
+echo "$VIETNAV_VERSION" > "$STATE/version" || die "could not write $STATE/version"
 sync
 DONE=1                     # every write is in: nothing below can undo them
 rm -rf "$TXN"

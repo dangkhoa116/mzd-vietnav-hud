@@ -25,6 +25,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 INST = os.path.join(REPO, "installer")
 BUSYBOX = os.environ.get("BUSYBOX")
+with open(os.path.join(REPO, "VERSION")) as _f:
+    VERSION = _f.read().strip()
 SH = [BUSYBOX, "sh"] if BUSYBOX else ["sh"]
 
 # A made-up sm.conf in the car's format: one line per <service ...>, children
@@ -429,7 +431,7 @@ def install_tests():
     c.seq(2)
     c.run("usb/install-patches.sh")
     check("after a CarPlay-kit rollback the menu says not installed",
-          "--title=VIETNAV HUD --text=Trang thai / Status:" in c.stublog()
+          "--title=VIETNAV HUD %s --text=Trang thai / Status:" % VERSION in c.stublog()
           and "CHUA CAI / not installed" in c.stublog(), c.stublog())
     rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
     check("...and installing again puts the lines back",
@@ -765,6 +767,13 @@ def touch_tests():
     check("touch: menu shows the status and the credit once installed",
           "DA CAI AA + CARPLAY / installed" in c.stublog()
           and "GO BO = remove" in c.stublog() and "- by dangkhoa116 -" in c.stublog(), c.stublog())
+    check("touch: ...under the stick's kit version, with the installed one",
+          "--title=VIETNAV HUD %s " % VERSION in c.stublog()
+          and "DA CAI AA + CARPLAY / installed " + VERSION in c.stublog()
+          and c.read("data_persist/vietnav/version") == (VERSION + "\n").encode(), c.stublog())
+    check("touch: the logs name the version",
+          "touch installer " + VERSION in (c.read("usb/vietnav-touch.log") or b"").decode()
+          and "vietnav %s target=" % VERSION in (c.read("usb/vietnav-install.log") or b"").decode())
     installed = c.read("jci/sm/sm.conf")
     c.seq(0, 1)                       # GO BO, then HUY on the confirm
     c.run("usb/install-patches.sh")
@@ -773,6 +782,7 @@ def touch_tests():
     c.seq(0, 0)                       # GO BO, GO BO (confirm)
     c.run("usb/install-patches.sh")
     check("touch: GO BO puts sm.conf back", c.read("jci/sm/sm.conf") == sm0, c.stublog())
+    check("touch: ...and forgets the installed version", c.read("data_persist/vietnav/version") is None)
 
 
 def build_kit_tests():
@@ -821,6 +831,22 @@ def build_kit_tests():
     err = bk.place_launcher(d, ours)
     check("build-kit: a clash is refused, nothing written",
           err is not None and rd(d, "install-patches.sh") == wcp_payload, err)
+
+    v, err = bk.version()
+    check("build-kit: VERSION and vietnav-install.sh agree", err is None and v == VERSION, err)
+    d = scratch("vietnav-ver-")
+    odd = os.path.join(d, "vietnav-install.sh")
+    with open(bk.ROOT_FILES["vietnav-install.sh"], encoding="utf-8") as f:
+        body = f.read()
+    with open(odd, "w", encoding="utf-8", newline="\n") as f:
+        f.write(body.replace('VIETNAV_VERSION="%s"' % VERSION, 'VIETNAV_VERSION="0.0.1"'))
+    real = bk.ROOT_FILES["vietnav-install.sh"]
+    bk.ROOT_FILES["vietnav-install.sh"] = odd
+    try:
+        v, err = bk.version()
+    finally:
+        bk.ROOT_FILES["vietnav-install.sh"] = real
+    check("build-kit: a kit whose versions differ is refused", err is not None and "0.0.1" in err, err)
 
 
 def host_tests():

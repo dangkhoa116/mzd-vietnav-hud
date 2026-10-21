@@ -169,7 +169,7 @@ nhau, không kit nào làm hỏng phần của kit khác.
 - [x] Bộ cài chạm cho firmware VN (74.00.331): AA mod + CarPlay bridge cùng một
       dia TouchTune, có gỡ cài và chế độ thu thập chẩn đoán; launcher dùng
       chung sống cùng kit TPMS và kit CarPlay không dây
-- [x] Kiểm tra trên máy: 98 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
+- [x] Kiểm tra trên máy: 104 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
       chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
       gì binary jci-dialog của xe thật sự hiển thị được
 - [ ] Buổi chạy xe: AA, rồi CarPlay (chỉ THU THAP khi có lỗi) — xác nhận trên
@@ -179,6 +179,16 @@ nhau, không kit nào làm hỏng phần của kit khác.
       binary upstream 0.10.0, bản vá nằm ở [patches/](patches/oem-aa-mod/) dạng
       nguồn
 - [ ] Đóng góp bản vá ngược lên upstream oem-aa-mod
+
+## Phiên bản
+
+Ghi trong `VERSION`, mỗi bản có tag `vx.y.z`. Hộp thoại cài hiện bản trên USB ở
+tiêu đề và bản đang cài ở dòng trạng thái (`DA CAI AA / installed 0.9.0`); các
+log trên USB cũng ghi số bản, và khi cài xong số bản được lưu ở
+`/data_persist/vietnav/version` (THU THAP có lấy file này). Đổi bản: sửa cùng lúc
+`VERSION` và `VIETNAV_VERSION` trong `installer/vietnav-install.sh` -
+`build-kit.py` từ chối build nếu hai chỗ khác nhau. Xe cài trước 0.9.0 không hiện
+bản đang cài.
 
 ## Giấy phép & ghi công
 

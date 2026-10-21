@@ -29,6 +29,10 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || HERE=$(dirname "$0")
 DIALOG=/jci/tools/jci-dialog
 AA_TOK=data_persist/oem-aa-mod/libpatch
 CP_TOK=data_persist/cp-hud-mod/libpatch
+# The version in a vietnav-install.sh (VIETNAV_VERSION="x.y.z"), empty if none.
+ver() { sed -n 's/^VIETNAV_VERSION="\([0-9.]*\)".*/\1/p' "$1" 2>/dev/null | head -n 1; }
+KV=$(ver "$HERE/vietnav-install.sh")
+TITLE="VIETNAV HUD${KV:+ $KV}"
 
 # Log to the stick when it takes a write (it mounts read-only).
 mount -o rw,remount "$HERE" 2>/dev/null || true
@@ -39,7 +43,7 @@ log() { printf '%s\n' "[vietnav-touch] $1"; }
 # The stick is FAT and gets pulled out without warning: sync on every way out.
 trap 'sync' EXIT
 
-log "=== VIETNAV HUD touch installer ==="
+log "=== VIETNAV HUD touch installer ${KV:-(no version)} ==="
 
 # --- fail-closed preconditions ---------------------------------------------------
 [ -x "$DIALOG" ] || { log "no jci-dialog - not a touch install, nothing done"; exit 0; }
@@ -58,11 +62,11 @@ ask2() {         # ask2 <title> <text> <ok> <cancel> -> exit code
 }
 say() {          # final message, one OK button, waits for the tap
     killall -q jci-dialog 2>/dev/null || true
-    "$DIALOG" --info --title="VIETNAV HUD" --text="$1" > /dev/null 2>&1
+    "$DIALOG" --info --title="$TITLE" --text="$1" > /dev/null 2>&1
 }
 popup() {        # "working..." box while a script runs
     killall -q jci-dialog 2>/dev/null || true
-    "$DIALOG" --info --title="VIETNAV HUD" --text="$1" --no-cancel > /dev/null 2>&1 &
+    "$DIALOG" --info --title="$TITLE" --text="$1" --no-cancel > /dev/null 2>&1 &
 }
 
 aa_installed() {
@@ -89,7 +93,9 @@ tname() {        # aa | cp | all -> what the screen says
 }
 
 INST=""; aa_installed && INST="aa"; cp_installed && INST="${INST}${INST:+ }cp"
-log "installed: ${INST:-none}"
+# the installed version: written by vietnav-install.sh since 0.9.0
+IV=$(cat /data_persist/vietnav/version 2>/dev/null)
+log "installed: ${INST:-none}${IV:+ ($IV)}"
 # which running services have a shim loaded (after the power cycle: all of
 # jciAAPA, aap_service, jciCARPLAY that were installed) - log only
 for _m in /proc/[0-9]*/maps; do
@@ -99,9 +105,9 @@ for _m in /proc/[0-9]*/maps; do
 done
 
 case "$INST" in
-    "aa cp") ST="DA CAI AA + CARPLAY / installed" ;;
-    aa)      ST="DA CAI AA / installed" ;;
-    cp)      ST="DA CAI CARPLAY / installed" ;;
+    "aa cp") ST="DA CAI AA + CARPLAY / installed${IV:+ $IV}" ;;
+    aa)      ST="DA CAI AA / installed${IV:+ $IV}" ;;
+    cp)      ST="DA CAI CARPLAY / installed${IV:+ $IV}" ;;
     *)       ST="CHUA CAI / not installed" ;;
 esac
 if [ -n "$INST" ]; then
@@ -110,7 +116,7 @@ else
     OK="CAI DAT"; DO="CAI DAT = install"
 fi
 
-ask3 "VIETNAV HUD" "Trang thai / Status:\n$ST\n$DO   THU THAP = collect logs\nHUY = cancel\n$CREDIT" \
+ask3 "$TITLE" "Trang thai / Status:\n$ST\n$DO   THU THAP = collect logs\nHUY = cancel\n$CREDIT" \
     "$OK" "THU THAP" "HUY"
 choice=$?
 log "choice: $choice"
@@ -150,7 +156,7 @@ if [ -z "$INST" ]; then
         exit 0
     fi
     # nothing is changed before this second tap
-    ask2 "VIETNAV HUD" "CAI DAT `tname $T`?\nInstall `tname $T`?\n\nHUY = cancel" "CAI DAT" "HUY"
+    ask2 "$TITLE" "CAI DAT `tname $T`?\nInstall `tname $T`?\n\nHUY = cancel" "CAI DAT" "HUY"
     [ "$?" = 0 ] || { log "install not confirmed"; exit 0; }
     log "install: $T"
     popup "Dang cai dat `tname $T`... Dung rut USB.\nInstalling `tname $T`... do not remove the USB."
@@ -168,7 +174,7 @@ else
         aa) T=aa ;;
         cp) T=cp ;;
     esac
-    ask2 "VIETNAV HUD" "GO BO `tname $T`?\nRemove `tname $T`?\n\nHUY = cancel" "GO BO" "HUY"
+    ask2 "$TITLE" "GO BO `tname $T`?\nRemove `tname $T`?\n\nHUY = cancel" "GO BO" "HUY"
     [ "$?" = 0 ] || { log "rollback not confirmed"; exit 0; }
     log "rollback: $T"
     popup "Dang go `tname $T`... Dung rut USB.\nRemoving `tname $T`... do not remove the USB."
