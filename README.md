@@ -28,6 +28,7 @@ This project adds what is still missing for the Vietnamese market:
 docs/
   vietmap-hud-gap.md           Diagnosis of "VIETMAP LIVE shows no street name" (tiếng Việt)
   vietmap-live-internals.md    VIETMAP LIVE 3.4.3 static-analysis profile (tiếng Việt)
+  vmlhud-nav-payloads.md       HUD BLE nav payload layouts — pinned by disassembly (tiếng Việt)
 patches/
   oem-aa-mod/
     0001-hud-nav16-road-budget-64-to-256.patch   Long-VN-road-name fix
@@ -41,6 +42,10 @@ installer/
   vietnav-collect.sh           Read-only diagnostics pack for the car session
   libpatch.conf.vn             VN runtime config (no nav SD: vbs transport, GAL 1.6)
   VIETNAV-STEPS.txt / .vi.txt  In-car instructions
+bridge/                        VIETMAP HUD BLE frame + nav-payload codec (Python, host-tested)
+emu/esp32-hud-emu/             ESP32 firmware that emulates a VIETMAP HUD (GATT FFF0,
+                               answers getHUDInfo, logs/decodes every frame) — the tool
+                               for the permission-gate test and runtime offset checks
 tests/
   road_fold_test.cpp           Host test for the patch (zig cc, runs on a PC)
   test_installer.py            Installer/rollback/launcher against a fake CMU
