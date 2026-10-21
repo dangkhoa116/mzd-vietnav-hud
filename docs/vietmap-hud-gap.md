@@ -84,12 +84,42 @@ Chạy VIETMAP LIVE dẫn đường thật và đọc log:
      `Step.setRoad` — dữ liệu đã có sẵn trong app (instruction/nextStepInstruction).
    - Chia sẻ chẩn đoán này cho cộng đồng otofun (tác giả mod đoán đúng hướng
      nhưng chưa có artifact kiểm chứng).
-   - Lưu ý: đường **iPhone/CarPlay** (mazda-carplay-hud) không phụ thuộc Trip của
-     app Android — iAP2 stream do iOS sinh từ CPNavigationSession, và VML iOS có
-     đầy đủ CPManeuver/instruction → không vướng H1.
+   - Đường **iPhone/CarPlay** cũng vướng, vì lý do khác: xem mục "CarPlay" bên dưới.
 2. **Nếu dữ liệu có mặt**: thử `force_street_name=true` (xe có thẻ SD, transport
    svcnavi).
 3. **Bản vá road-budget** trong repo này áp dụng độc lập với kết quả trên.
+
+## CarPlay: VML không cho iOS gửi dẫn đường sang xe (xác nhận 21-10-2026)
+
+Trên xe (CX-5 74.00.324A, VIETNAV 0.9.1, CarPlay bridge chạy): **Google Maps lên
+HUD, VIETMAP LIVE không lên**. Vậy chuỗi phía xe (bridge, `NaviSupported`, vbs)
+chạy đúng; thiếu là ở phía app.
+
+Với CarPlay, xe không đọc màn hình của app: iOS phát luồng route guidance iAP2
+(cái mà mazda-carplay-hud đọc) chỉ khi app đồng ý chia sẻ dữ liệu dẫn đường với
+xe, qua `CPMapTemplateDelegate.mapTemplateShouldProvideNavigationMetadata(_:)`
+(iOS 17.4). Không cài đặt hàm này thì mặc định là không chia sẻ.
+
+Phân tích tĩnh IPA 3.4.3 (`vietmap_live_navigation_plugin.framework`, không mã
+hoá FairPlay; đọc danh sách method của từng lớp ObjC):
+
+- Lớp `VIETMAPCarPlayManager2` cài đặt 10 hàm của `CPMapTemplateDelegate`
+  (`startedTrip`, `displayStyleForManeuver`, `shouldShowNotificationForManeuver`,
+  …) nhưng **không có `mapTemplateShouldProvideNavigationMetadata:`**. Không
+  framework nào khác trong app cài đặt nó. Tên selector có trong binary chỉ vì
+  nằm trong danh sách của protocol.
+- Không dùng API dữ liệu dẫn đường cho xe của iOS 17.4: không `addManeuvers`,
+  `maneuverType`, `junctionType`, `CPLaneGuidance`, `CPRouteInformation`,
+  `currentRoadNameVariants`.
+- Chỉ dùng API CarPlay cổ điển (`CPManeuver` với `instructionVariants`,
+  `symbolImage`, `junctionImage`, `CPTravelEstimates`) để vẽ trên màn CarPlay.
+- Model `FLTCarPlayCarManeuver_Args` giống bản Android: không có trường tên đường.
+
+**Kết luận:** phía xe không sửa được, vì iOS không gửi gì để bridge đọc. Cần
+Vietmap: cài đặt `mapTemplateShouldProvideNavigationMetadata` trả về `true`, và
+để có mũi tên/tên đường đúng thì điền metadata iOS 17.4 cho `CPManeuver`
+(`maneuverType`, `junctionType`, `roadFollowingManeuverVariants`, …). Trong lúc
+chờ, trên iPhone dùng Google Maps hoặc Apple Maps để có HUD.
 
 ## Ghi chú thêm
 

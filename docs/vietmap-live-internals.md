@@ -34,9 +34,11 @@ phát lại binary.
 - Binary `vietmap_live_navigation_plugin.framework` (bản phân tích đã được bóc
   lớp mã hoá FairPlay): có `startNavigationSession` (selector dùng thật), `CPMapTemplate`,
   `CPManeuver`, `CPTrip`, `CPNavigationAlert`, `CPInterfaceController`.
-- Hàm ý: khi app gọi `startNavigationSession`, iOS tự phát luồng turn-by-turn
-  iAP2 (đúng cấu trúc mà mazda-carplay-hud tap) → đường CarPlay → HUD không
-  phụ thuộc cách app Android dựng Trip.
+- **Sửa (21-10-2026):** trước đây ghi rằng iOS tự phát luồng iAP2 khi app gọi
+  `startNavigationSession`. Không đúng: app phải đồng ý qua
+  `mapTemplateShouldProvideNavigationMetadata`, và VML 3.4.3 không cài đặt hàm
+  này, nên trên xe Google Maps lên HUD còn VML thì không. Chi tiết:
+  [vietmap-hud-gap.md](vietmap-hud-gap.md#carplay-vml-không-cho-ios-gửi-dẫn-đường-sang-xe-xác-nhận-21-10-2026).
 
 ## Giao thức phụ kiện của nhà sản xuất (tham khảo)
 
