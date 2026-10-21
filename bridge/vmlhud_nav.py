@@ -121,12 +121,19 @@ def decode_nav_variable(payload):
 
 
 # ---------------------------------------------------------------------------
-# Layout "variable v2" (SimplifyNavigationInformationData), CMD 0x40,
-# gui bang sendParamData:andCMD:0x40.
+# Layout "variable v2" (SimplifyNavigationInformationData; SDK DJ Android
+# W7/c.java, W7/e.java), CMD 0x40, gui bang sendParamData:andCMD:0x40.
+#
+# Semantics tu Android: sau direction la khoi "anh mui ten custom":
+#   u32be image_len  = 1 -> KHONG co anh (hai byte than tro thanh hang so
+#                      00 00 00 01 + flag 0); > 1 -> do dai JPEG custom
+#   neu image_len == 1: u8 image_flag (0 = khong anh, 1 = giu anh cu)
+#   neu image_len > 1 : <image_len byte JPEG> (bo qua khi giai ma nav)
+# roi moi toi distance.
 #
 #   [0]     u8    direction
-#   [1..4]  00 00 00 01 (hang so)
-#   [5]     01 (hang so)
+#   [1..4]  u32be image_len (=1 khi khong anh)
+#   [5]     u8    image_flag  (hoac JPEG dai image_len neu >1)
 #   [6..9]  u32be distance_m
 #   [10]    u8    len(next_road)
 #   [11..]  next_road UTF-8
@@ -138,12 +145,20 @@ def decode_nav_variable(payload):
 def decode_nav_variable2(payload):
     if len(payload) < 21:
         raise ValueError("payload variable2 qua ngan: %d" % len(payload))
-    if payload[1:5] != b"\x00\x00\x00\x01" or payload[5] != 0x01:
-        raise ValueError("khong phai header variable2: %s" % payload[:6].hex())
-    o = 0
-    direction = payload[o]
-    (distance_m,) = struct.unpack_from(">I", payload, 6)
-    o = 10
+    (image_len,) = struct.unpack_from(">I", payload, 1)
+    if image_len == 1:
+        if payload[5] not in (0, 1):
+            raise ValueError("image_flag la: %d" % payload[5])
+        dist_off = 6
+    elif image_len > 1:
+        if len(payload) < 5 + image_len + 4:
+            raise ValueError("thieu byte anh custom: %d" % len(payload))
+        dist_off = 5 + image_len
+    else:
+        raise ValueError("image_len=%d vo ly" % image_len)
+    direction = payload[0]
+    (distance_m,) = struct.unpack_from(">I", payload, dist_off)
+    o = dist_off + 4
     ln_next = payload[o]; o += 1
     next_road = payload[o:o + ln_next]; o += ln_next
     ln_cur = payload[o]; o += 1
@@ -217,7 +232,8 @@ def decode_nav(payload, cmd=None):
     else:
         if len(payload) >= FIXED_LEN:
             order = [decode_nav_fixed, decode_nav_variable, decode_nav_variable2]
-        elif len(payload) > 5 and payload[1:5] == b"\x00\x00\x00\x01":
+        elif len(payload) > 5 and payload[1:5] >= b"\x00\x00\x00\x01":
+            # [1..5] la u32 image_len (>=1) cua variable2 (khoang bien thi = 1)
             order = [decode_nav_variable2, decode_nav_variable, decode_nav_fixed]
         else:
             order = [decode_nav_variable, decode_nav_variable2, decode_nav_fixed]

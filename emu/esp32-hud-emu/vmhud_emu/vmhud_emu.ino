@@ -33,7 +33,10 @@ String g_name     = "VMHUD-EMU";     // phai chua "HUD", KHONG chua "TPMS"
 String g_model    = "H50";
 String g_hw       = "1.0.0";
 String g_fw       = "1.0.0";
-String g_protocol = "1.6";           // thu "2.0" neu app can dinh dang moi
+// PROTOCOL trong dap getHUDInfo chon hang vi phia app (SDK DJ Android):
+//   "1.6" -> ban toi thieu: KHONG gui dan duong (J() tra null), chi heartbeat!
+//   "2.2.0"/"2.2.1" -> W7/c; "2.2.2" -> W7/d; "2.2.2S" -> W7/e (day du nhat)
+String g_protocol = "2.2.2S";
 String g_sid      = "VMEMU0000001";  // serial; nhanh B: dung serial HUD that cua minh
 
 // ---------------- GATT ----------------
@@ -135,10 +138,18 @@ bool decode_variable(const uint8_t *p, size_t n, NavInfo &out) {   // v1
 
 bool decode_variable2(const uint8_t *p, size_t n, NavInfo &out) {  // v2 (CMD 0x40)
   if (n < 21) return false;
-  if (p[1] != 0 || p[2] || p[3] || p[4] != 1 || p[5] != 1) return false;
+  uint32_t image_len = be32(p + 1);
+  size_t dist_off;
+  if (image_len == 1) {
+    if (p[5] > 1) return false;
+    dist_off = 6;
+  } else if (image_len > 1) {
+    if (n < 5 + image_len + 4) return false;
+    dist_off = 5 + image_len;      // bo qua JPEG anh mui ten custom
+  } else return false;
   out.direction = p[0];
-  out.distance_m = be32(p + 6);
-  size_t o = 10;
+  out.distance_m = be32(p + dist_off);
+  size_t o = dist_off + 4;
   uint8_t ln = p[o++]; if (o + ln > n) return false;
   out.nxt = utf8z(p + o, ln); o += ln;
   uint8_t lc = p[o++]; if (o + lc > n) return false;

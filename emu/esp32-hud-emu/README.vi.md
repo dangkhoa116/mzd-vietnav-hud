@@ -40,7 +40,8 @@ board cắm USB là chạy.
 MODEL:H50          # ten model tra trong getHUDInfo (H1AS / H1X / H50 ...)
 HW:1.0.0
 FW:1.0.0
-PROTOCOL:1.6       # thu "2.0" de xem app chon dinh dang payload nao
+PROTOCOL:2.2.2S     # 2.2.0/2.2.1/2.2.2/2.2.2S = co dan duong; "1.6" = ban toi
+                    # thieu, app KHONG gui dan duong (chi heartbeat)
 SID:VMEMU0000001   # serial; nhanh B: dung serial HUD that cua minh
 NAME:VMHUD-EMU     # ten quang ba (phai chua "HUD", khong chua "TPMS")
 STATUS             # xem cau hinh hien tai

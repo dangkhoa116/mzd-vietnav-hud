@@ -5,6 +5,7 @@
 # (docs/vmlhud-nav-payloads.md) + mot vai frame "tay" theo byte that cua
 # cac nhanh code da doc. Neu app gui khac di, se thay ngay o capture runtime.
 
+import struct
 import sys
 
 import vmlhud_frame as F
@@ -83,6 +84,19 @@ info = N.decode_nav(N.build_nav_fixed(nav_long))
 check("fixed cat 0x50", info.current_road == "X" * 0x50)
 info = N.decode_nav(N.build_nav_variable(nav_long))
 check("variable1 cat 255", info.current_road == "X" * 255)
+
+# --- variable2 voi ANH mui ten custom (u32 = do dai JPEG, anh noi ngay sau) ---
+img = bytes(range(200))  # gia lap JPEG
+v2img = bytes((nav.direction,)) + struct.pack(">I", len(img)) + img         + struct.pack(">I", nav.distance_m)         + bytes((len(b"Le Dai Hanh"),)) + b"Le Dai Hanh"         + bytes((len(b"Nguyen Van Linh"),)) + b"Nguyen Van Linh"         + struct.pack(">H", 0) + bytes((20, 34))         + struct.pack(">I", 5678) + struct.pack(">H", 61)
+info = N.decode_nav_variable2(v2img)
+check("v2+anh direction", info.direction == 12)
+check("v2+anh distance", info.distance_m == 350)
+check("v2+anh next_road", info.next_road == "Le Dai Hanh")
+check("v2+anh current_road", info.current_road == "Nguyen Van Linh")
+check("v2+anh remain", info.remain_time_s == 1234 and info.remain_dist_m == 5678)
+check("v2+anh speed", info.speed_kmh == 61)
+info = N.decode_nav(v2img)
+check("v2+anh auto-detect", info.layout == "variable2")
 
 # --- trong khung: frame CMD 0x40 (variable2) va CMD 0x00 (variable1/fixed) ---
 fr40 = F.build(0x40, v2)

@@ -134,3 +134,36 @@ chấp nhận (vẫn nên gửi chuẩn).
    variable; xác nhận khi bắt được khung fixed.
 3. **Bước cấp quyền** (`SID` → máy chủ): quyết định nhánh A/B của cả kiến trúc
    (xem `vietmap-hud-bridge.md`).
+
+## 9. Doi chieu cheo voi APK Android (21-10-2026, bo sung buoi toi)
+
+Giai ma jadx APK Android cua VIETMAP LIVE cho thay SDK DJ white-label viet bang
+Kotlin/Java doc duoc 100% (goi `U7` = manager, `W7` = cac ban protocol). Moi
+khai niem tren day duoc xac nhan lai tung byte:
+
+- **Frame** (`p010a8.c.f`): `A5 5A 37 C3 | len BE (=payload+12, payload da gom
+  CMD) | ts BE | payload (byte [0] = CMD) | MD5(magic..payload)`. Trung khop
+  hoan toan voi iOS.
+- **Nav payload** (`W7/c.java J()` = protocol 2.2.0/2.2.1, `W7/e.java` = 2.2.2S):
+  TLV chi ghi gia tri thoi (khong tag). Thu tu: CMD 0x40, direction u8,
+  **u32 image_len**, image/flag, distance u32, len+next_road, len+current_road,
+  h u16 + m u8 + s u8, remain u32, speed u16.
+- **Semantics khoi "00 00 00 01"**: do la `image_len = 1` = KHONG co anh mui ten
+  custom; khi app co anh custom (Android nhan qua `imageBase64`) thi u32 =
+  do dai JPEG va anh noi ngay sau do. Byte ke tiep khi image_len==1 la flag
+  (0 = khong anh, 1 = giu anh cu).
+- **Bang PROTOCOL chon hanh vi** (tu `U7/a.java`, sau khi parse getHUDInfo):
+  `2.2.0`/`2.2.1` -> `W7/c`; `2.2.2` -> `W7/d`; `2.2.2S` -> `W7/e`; bat ky gia
+  tri khac (gom ca "1.6") -> `W7/b` = **ban toi thieu, `J()` tra null: KHONG
+  gui dan duong, chi heartbeat**. Vi vay emulator phai tra PROTOCOL 2.2.x.
+- **Hai ho thiet bi, hai bo GATT** (tu `Ma/i.java`, `Ma/j.java`):
+  - H1/DJBT: service `FFF0` (`FFF2` write / `FFF1` notify / `FFF3` / `FFF4`)
+  - H50: service `FFFF` (`9ABC` write / `1234` notify); handler native H50 chi
+    la byte-pipe (`sendBytesData`) - toan bo protocol H50 nam phia Dart.
+  Emulator hien expose ca hai dong thoi.
+- **Ket noi theo dia chi** (`connectDeviceNativeApi {address, type}`):
+  type 2 = H50, 3 = H1, con lai = DJBT - Dart tu quet qua plugin BLE chung
+  roi moi truyen dia chi xuong.
+
+Nguon phan tich: `work/analysis/apk/` (ngoai repo) - jadx output cua APK do chu
+xe cung cap.
