@@ -11,6 +11,24 @@ Mục tiêu: **VIETMAP LIVE trên điện thoại → giả HUD VietMap → dẫ
 Bước cần làm ngay là thử BLE thật bằng C3 và lấy log, sau đó mới chốt profile
 để triển khai trên CMU. Chưa có bằng chứng app đã gửi nav cho emulator thật.
 
+## Cập nhật từ phiên local 22-10-2026
+
+- Đã clone main trên Windows và chạy lại 7 test bridge/capture, 36 kiểm frame,
+  65 kiểm nav: PASS. Chưa chạy lại bộ C++ sanitizer/ARM trên máy này.
+- Board đang có firmware khác source bàn giao. PC thấy VMHUD-EMU, kết nối GATT
+  được; probe FFF2 không đáp, H50 trả khung thừa 8 byte. Người dùng vẫn chưa
+  thấy thiết bị trong màn HUD của VIETMAP LIVE 3.4.3 trên Android/iOS.
+- Đã phân tích nhánh OTA bằng REA 6.7.0 và DAE 0.1.13 bổ trợ iOS; xác định
+  POST /v20/hud/updatefirmware, sáu trường body và response.downloadUrl.
+  Chưa lấy được response có xác thực hay firmware; không coi 401 là bằng
+  chứng server yêu cầu serial thật. fwnew.bin là đường dẫn local.
+- ADB đã kết nối tablet Samsung, app 3.4.3 đang chạy; run-as không được phép,
+  log app chưa có token/request OTA. Chưa cấu hình proxy hoặc cài CA.
+- Đọc [báo cáo OTA](docs/hud-firmware-ota-analysis.vi.md) và
+  [công cụ tái kiểm/tải](tools/hud_ota/README.vi.md) để tiếp tục.
+- Cài REA/MCP nằm ngoài Git, cần khởi động lại Codex để dùng MCP; CLI đã chạy.
+  Không có kết quả tải firmware, flash board/xe hay nav thật trong phiên này.
+
 ## Lấy source trên local
 
 Source và tài liệu này được gom trong cùng đợt commit/push lên `main` của

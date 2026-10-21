@@ -1,0 +1,8 @@
+{
+  "model": "<model>",
+  "hardwareVersion": "<hardwareVersion>",
+  "firmwareVersion": "<firmwareVersion>",
+  "obdModel": "<obdModel>",
+  "obdVersion": "<obdVersion>",
+  "serialNumber": "<serialNumber>"
+}
