@@ -55,3 +55,6 @@ phát lại binary.
 
 Những thông tin trên cho thấy: HUD rời và cảm biến lốp của cùng hệ sinh thái giao
 tiếp qua serial Bluetooth đơn giản — không phải giao thức độc quyền đóng.
+
+Chi tiết giao thức BLE của đường HUD rời (khung gói tin, service/characteristic,
+và rào cản cấp quyền phía máy chủ): [vietmap-hud-sdk.md](vietmap-hud-sdk.md).

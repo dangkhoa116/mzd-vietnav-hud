@@ -28,6 +28,7 @@ Dự án này bổ sung phần còn thiếu cho thị trường Việt Nam:
 docs/
   vietmap-hud-gap.md           Chẩn đoán khoản trống "VML không hiện tên đường"
   vietmap-live-internals.md    Hồ sơ kỹ thuật VIETMAP LIVE 3.4.3 (phân tích tĩnh)
+  vietmap-hud-sdk.md           Giao thức VIETMAP ↔ HUD rời + rào cản cấp quyền
 patches/
   oem-aa-mod/
     0001-hud-nav16-road-budget-64-to-256.patch   Bản vá tên đường VN dài
