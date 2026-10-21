@@ -91,11 +91,47 @@ vòng nên không giả mạo gì. Tốn thêm một HUD rời nhỏ nhưng ch�
 Cùng một `vmlhud_frame.py` + `vmlhud_nav.py` dùng cho cả hai nhánh; chỉ khác chỗ
 daemon lấy byte từ đâu (tự nhận hay nghe ké).
 
+## Khả năng Bluetooth của CMU (xác nhận từ rootfs 74.00.333A)
+
+Soi stack BT trong firmware (`usr/sbin/bluetoothd`, `etc/bluetooth/main.conf`,
+`lib/modules/3.0.35`):
+
+| Hạng mục | Kết quả |
+| --- | --- |
+| BlueZ | **4.98** (cũ; không có D-Bus GATT API kiểu BlueZ 5 — `GattManager1`/`LEAdvertisingManager1` không có) |
+| Kernel / nền | **3.0.35**, i.MX6; module `bluetooth.ko`, `rfcomm.ko`, `bnep.ko`, `hidp.ko`, `hci_uart.ko`, `ti-st/tty_hci.ko` |
+| Chip BT | **TI WiLink** (shared transport), firmware `TIInit_10.6.15.bts` |
+| LE ở mức HCI | **Có.** bluetoothd có `LE Set Advertise Enable/Data/Parameters`, `hcitool` có `lescan/lecc/lewladd` → controller **quảng bá được** (peripheral ở mức HCI) |
+| GATT/ATT server | **Tắt.** `AttributeServer = false` trong `main.conf` (BlueZ: "chỉ là thử nghiệm"). Stack cấu hình classic-only |
+| SPP / RFCOMM classic | **Đầy đủ.** plugin `org.bluez.Serial`/`SerialProxy`, `rfcomm.ko`, `sdptool`, `rfcomm`, `serial.conf` |
+
+**Kết luận: transport quyết định độ khó, và nó gắn với HĐH điện thoại khách.**
+
+- **SPP classic (điện thoại Android) — khả thi trên stack zin.** SDK Vietmap có
+  đường **SPP classic (UUID `00001101`)** song song BLE. Nếu VIETMAP LIVE Android
+  nối HUD qua SPP, CMU host một RFCOMM/SPP server (đăng ký SDP record `1101`,
+  nhận kết nối, bơm khung `A5 5A 37 C3`) — **không cần đụng BlueZ/kernel**. Codec
+  `vmlhud_frame.py` dùng chung, vì khung độc lập với transport. Đây nhiều khả năng
+  là đường một sản phẩm nhắm Android đang chạy.
+- **BLE peripheral (iPhone; HUD chỉ-BLE) — khó trên stack này.** iOS không cho
+  phụ kiện SPP nếu không có MFi, nên iPhone chỉ đi BLE. Mà GATT server zin đang
+  tắt và BlueZ 4.98 không có API GATT dùng được. Chỉ còn hai lối:
+  1. **Raw HCI**: tự `LE Set Advertising` (controller làm được) + viết **ATT
+     server trong userspace trên socket L2CAP LE** (CID 4, kiểu bleno). Kernel
+     3.0.35 hỗ trợ LE peripheral tới đâu thì **phải thử trên phần cứng** — rủi ro.
+  2. **Nhánh B — HUD Vietmap thật làm mỏ neo** (xem trên). Chắc ăn cho iPhone.
+- **Chung sống với điện thoại:** BT của CMU đang bận HFP/A2DP/PBAP. Việc host SPP
+  server / advertise LE **đồng thời** với cuộc gọi/nhạc, và việc `jci` BT manager
+  có nhường adapter cho một daemon lạ không, **phải kiểm trên xe/emu**.
+
+Vì vậy, câu hỏi định hướng tiếp theo là **khách chủ yếu dùng Android hay iPhone**:
+Android → đi SPP (dễ); iPhone → raw-HCI BLE (khó) hoặc nhánh B.
+
 ## Việc #3 — daemon trên CMU
 
-- BLE peripheral: MZD Connect dùng **BlueZ**. Cần xác nhận CMU đăng ký được một
-  GATT server / advertise song song với HFP/A2DP cho điện thoại. Kiểm trên emu
-  hoặc rootfs firmware trước (xem `docs/emu-yeu-cau.md`).
+- Transport theo bảng trên: Android → **RFCOMM/SPP server** (dễ, stack zin);
+  iPhone → **BLE raw-HCI** hoặc **nhánh B**. Kiểm việc chung sống với HFP/A2DP
+  trên emu/rootfs trước (xem `docs/emu-yeu-cau.md`).
 - Inject: dùng đúng đường `com.jci.vbs.navi` mà cầu CarPlay đang dùng — đọc cách
   nó đóng gói guidance rồi tái sử dụng.
 - Đóng gói: thêm một kit cài USB thứ ba bên cạnh AA/CarPlay, cùng cơ chế
