@@ -57,14 +57,14 @@ Mỗi khung dữ liệu (little-endian trừ chỗ ghi rõ):
 - `sendHeartBeat` → gửi hai khung, một theo nhánh protocol 1.6
   (`sendParamDataProtocol_1_6WithData:andCMD:`) CMD `0x02`, một theo
   `sendParamData:` CMD `0x02`, payload mang tốc độ hiện tại.
-- Dẫn đường (`insideSendNavigationInformation…`): dựng một payload rồi gửi.
-  Có **hai định dạng payload** tuỳ `hudInfo` (loại HUD đọc được lúc bắt tay):
-  - **Định dạng cố định ~0xAF byte** (HUD 1.6 cũ): các trường (hướng, khoảng
-    cách, thời gian/quãng còn lại, tốc độ) ghi vào vị trí cố định, tên đường
-    cắt/đệm về khung cố định (giới hạn ~0x4F byte mỗi tên, UTF-8 qua
-    `dataUsingEncoding:4`), CMD `0x00`, gửi bằng nhánh 1.6.
-  - **Định dạng biến đổi** (HUD mới hơn): header + tên đường theo độ dài thật,
-    rồi các trường số, CMD `0x00`, gửi bằng `sendParamData:`.
+- Dẫn đường (`insideSendNavigationInformation…`): có **BA định dạng payload**;
+  toàn bộ offset đã được chốt tĩnh ngày 21-10-2026 (disassembly đầy đủ) — xem
+  [vmlhud-nav-payloads.md](vmlhud-nav-payloads.md):
+  - **fixed 0xAF byte** (khi `hudInfo == nil`), CMD `0x00`, nhánh protocol 1.6;
+  - **variable1** (`hudInfo != nil`), CMD `0x00`, `sendParamData:`;
+  - **variable2 "Simplify"** (header `00 00 00 01 01`), CMD `0x40`.
+  Đáp `getHUDInfo` là chuỗi text `MODEL:..,HW:..,FW:..,PROTOCOL:..,OBDV:.._..,SID:..`;
+  MD5 trên khung nhận không dùng để từ chối.
 - Khung nhận về (`dataParsing` trên characteristic notify): byte `0x5A` phân
   loại, các trường TPMS/OBD/HUDInfo cắt theo `subdataWithRange:`, và có nhánh
   so MD5 trên dữ liệu nhận.

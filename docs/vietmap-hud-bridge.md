@@ -36,14 +36,18 @@ Phần **đầu ra** (`com.jci.vbs.navi` → HUD, kèm bản vá tên đường 
 | File | Vai trò | Trạng thái |
 | --- | --- | --- |
 | `bridge/vmlhud_frame.py` | Mã hoá/giải mã khung `A5 5A 37 C3` (magic, length, timestamp, CMD, payload, MD5) | **Xong**, 36/36 test pass. Lớp khung đã xác nhận từ static analysis |
-| `bridge/vmlhud_nav.py` | Giải mã payload dẫn đường → struct trung lập | **Scaffold** — offset trường CHƯA chốt, chờ capture |
+| `bridge/vmlhud_nav.py` | Giải mã payload dẫn đường → struct trung lập | **Xong (tĩnh)** — 3 layout chốt từ disassembly, 55/55 test; còn đối chiếu runtime bảng direction |
+| `emu/esp32-hud-emu/` | ESP32 giả lập HUD (GATT FFF0, đáp getHUDInfo, log+giải mã mọi khung) | **Xong** — công cụ cho Việc #1/#2 |
 | `bridge/vmlhud_frame_test.py` | Test tự nhất quán của lớp khung | Xong |
 | (chưa có) `bridge/vmlhud-bridge` | Daemon BLE peripheral trên CMU (BlueZ GATT) + inject `com.jci.vbs.navi` | Chờ chốt giao thức |
 
 ## Việc #1 — bắt một phiên thật (quyết định mọi thứ)
 
-Static analysis cho **cấu trúc khung** (đã chắc) nhưng **không cho offset từng
-trường trong payload dẫn đường** cho chắc. Phải bắt một phiên thật:
+~~Static analysis cho cấu trúc khung nhưng không cho offset từng trường~~
+**Cập nhật 21-10-2026: offset payload đã chốt tĩnh**
+([vmlhud-nav-payloads.md](vmlhud-nav-payloads.md)). Phiên chạy thật (với HUD
+thật HOẶC emulator ESP32) giờ chỉ còn để: chốt bảng `direction`, xác nhận 2
+byte cuối layout fixed, và đối chiếu toàn diện. Cách làm:
 
 1. **Mua một HUD rời Vietmap thật** (H1AS/H1X/H50… — vài trăm nghìn). Đây vừa là
    nguồn capture, vừa là mỏ neo cấp quyền hợp lệ cho nhánh B.
@@ -61,6 +65,10 @@ trường trong payload dẫn đường** cho chắc. Phải bắt một phiên 
 Không có HUD thật thì chỉ dừng ở lớp khung; không thể bảo đảm đúng trên xe khách.
 
 ## Việc #2 — test bước cấp quyền (xác định nhánh A hay B)
+
+Công cụ sẵn sàng: nạp `emu/esp32-hud-emu` vào ESP32 (không cần HUD thật cho
+thí nghiệm đầu). Đáp getHUDInfo của emulator trả đúng định dạng text mà app
+phân tích (kể cả `SID` tuỳ cấu hình qua serial).
 
 App có luồng xin quyền phía máy chủ (`/v20/hud/UpdatePermission`, `verifyHUD`,
 `onInvalidHUDConnected`, "HUD not start auto connect when unauth" — xem

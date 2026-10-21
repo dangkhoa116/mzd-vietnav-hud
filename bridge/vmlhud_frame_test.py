@@ -70,11 +70,11 @@ check("stream giu phan du", rest.endswith(b[:-3][-5:]))
 frames2, rest2 = F.split_stream(a + b)
 check("stream tach 2 khung", len(frames2) == 2 and rest2 == b"")
 
-# --- nav variable round-trip (theo layout GIA THUYET) ---
-pl = (bytes((3,)) + struct.pack(">I", 120) + struct.pack(">I", 540)
-      + struct.pack(">I", 2300) + bytes((48,))
-      + bytes((len(b"Vo Van Kiet"),)) + b"Vo Van Kiet"
-      + bytes((len(b"Nguyen Van Linh"),)) + b"Nguyen Van Linh")
+# --- nav variable v1 round-trip (layout DA CHOT tu disassembly; builder chinh la spec) ---
+nav_in = N.NavInfo(direction=3, distance_m=120, current_road="Vo Van Kiet",
+                   next_road="Nguyen Van Linh", remain_time_s=540,
+                   remain_dist_m=2300, speed_kmh=48)
+pl = N.build_nav_variable(nav_in)
 nav = N.decode_nav_variable(pl)
 check("nav dir", nav.direction == 3)
 check("nav distance", nav.distance_m == 120)
