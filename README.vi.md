@@ -1,10 +1,37 @@
 # mzd-vietnav-hud
 
-**Đưa dẫn đường tiếng Việt lên HUD zin (Active Driving Display) của Mazda Connect** — cho mọi app dẫn đường Việt Nam: VIETMAP LIVE, Waze, Google Maps. Cả hai phía điện thoại: **Android Auto** (GAL 1.6) và **Apple CarPlay** (iAP2).
+**Nghiên cứu đưa dẫn đường tiếng Việt lên HUD zin (Active Driving Display) của Mazda Connect** qua **Android Auto** (GAL 1.6), **Apple CarPlay** (iAP2) và nhánh giả lập HUD BLE cho VIETMAP LIVE.
 
 [English](README.md) | Tiếng Việt
 
+[Tiếp tục trên máy local: bàn giao, cài môi trường và bước tiếp theo](CONTINUE-LOCAL.vi.md).
+
 > Dự án nghiên cứu + bản vá tương thích cho Mazda Connect CMU150 (MZD Connect, đời CX-5 KF / CX-8 / cùng nền tảng). Không liên kết với Mazda, Vietmap, Google hay Apple.
+
+## Đang phát triển: giả lập HUD VietMap
+
+Đã có bản thử `VIETNAV HUD` trên Linux/BlueZ và decoder lấy hướng rẽ, khoảng
+cách, tên đường, camera từ giao thức HUD rời trong IPA VML 3.4.3. Đã qua 21
+test codec/CLI/D-Bus; **chưa xác nhận app chấp nhận qua BLE thật và chưa nối
+nhánh này lên HUD Mazda**. [Cách chạy và phần còn thiếu](docs/hud-emulator.md).
+Phần cấp quyền vẫn cần xác minh; phân tích lại đã sửa lỗi mô tả checksum và
+nhận định quá chắc trong [tài liệu SDK](docs/vietmap-hud-sdk.md).
+
+Trên xe, Google Maps/Apple Maps đã được xác nhận qua bridge CarPlay; VML 3.4.3
+chưa gửi metadata cần cho bridge đó. Bản thử BLE chưa nằm trong kit USB 0.9.1.
+
+Đã bổ sung [nhánh native CMU](native/README.md), dùng HCI của TPMS để quảng bá,
+nhận kết nối và phục vụ GATT. Có bản ARM glibc 2.11: 70 test host, 229 kiểm tra
+mux và 5 test transport ARM/QEMU pass. Có [USB thử riêng](native/usb/README.md)
+kiểm tra trước khi kết nối, chạy một lần, thu log và khôi phục TPMS.
+Chưa thử BLE thật và chưa nối output VBS cho nhánh này.
+
+Với board **ESP32-C3 Mini** đang có, dùng [firmware và hướng dẫn lấy
+log](emu/esp32-hud-emu/README.vi.md). Đã build cả bản quảng bá legacy mặc định
+và bản extended thử nghiệm bằng Arduino-ESP32 3.3.2 / NimBLE 2.3.7. Codec C++
+qua sanitizer, vector SDK, đối chiếu Python và 50.000 đầu vào lỗi; chưa xác
+nhận app trên board thật. C3 hỗ trợ BLE, không có SPP Classic. SPP trên CMU
+cũng còn phụ thuộc quyền sở hữu radio và profile app thực sự chọn.
 
 ## Bối cảnh
 
@@ -28,7 +55,12 @@ Dự án này bổ sung phần còn thiếu cho thị trường Việt Nam:
 docs/
   vietmap-hud-gap.md           Chẩn đoán khoản trống "VML không hiện tên đường"
   vietmap-live-internals.md    Hồ sơ kỹ thuật VIETMAP LIVE 3.4.3 (phân tích tĩnh)
-  vietmap-hud-sdk.md           Giao thức VIETMAP ↔ HUD rời + rào cản cấp quyền
+  vietmap-hud-sdk.md           Giao thức VIETMAP ↔ HUD rời, cấp quyền chưa xác minh
+  hud-emulator.md              Giả lập BLE: cách thử với iPhone và trạng thái
+hud_emulator/
+  protocol.py                  Codec hai định dạng HUD + navigation/camera
+  bluez.py                     Peripheral Linux/BlueZ, thu log JSON Lines
+  __main__.py                  CLI: ble / decode
 patches/
   oem-aa-mod/
     0001-hud-nav16-road-budget-64-to-256.patch   Bản vá tên đường VN dài
@@ -45,6 +77,8 @@ installer/
 tests/
   road_fold_test.cpp           Host test cho bản vá (zig cc, chạy trên PC)
   test_installer.py            Test installer/rollback/launcher trên CMU giả
+  test_hud_protocol.py         17 test codec/CLI, dữ liệu tự tạo
+  test_hud_bluez.py            4 test D-Bus/session, không dùng radio BLE
   shim/sys/                    Shim POSIX tối giản để test build trên Windows
   Makefile
 ```

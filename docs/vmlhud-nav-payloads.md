@@ -25,9 +25,11 @@ remainDist, currentSpeed) được đóng gói theo **ba** layout, chọn lúc c
 | **variable1** | inline trong `insideSendNavigationInformation…` (0x4804) | `0x00` | `sendParamData:andCMD:` | `self.hudInfo != nil` |
 | **variable2** ("Simplify") | `SimplifyNavigationInformationData…` (0x5348) | `0x40` | `sendParamData:andCMD:0x40` | đường gửi mới (H50), hai caller (0x4ddc, 0x52ac) đều gửi CMD 0x40 |
 
-Điểm chung: **mọi layout đều kết thúc bằng** `gio u16be + phut u8 + giay u8 +
-quang u32be + toc_do u16be`; mọi số đa byte là **big-endian**; tên đường
-UTF-8 (`dataUsingEncoding:4`).
+Điểm chung: đuôi có `gio u16be + phut u8 + time_third u8 + quang u32be +
+toc_do u16be`; mọi số đa byte là **big-endian**, tên đường UTF-8. **Không coi
+`time_third` của variable là giây:** nhánh iOS tại 0x4A6C–0x4A70 ghi byte thấp
+của tổng phút còn lại. Codec giữ nguyên raw và để `remain_time_s=None` cho
+variable. Fixed có cách đóng gói giờ/phút/giây riêng.
 
 ## 2. Layout "fixed" — 0xAF (175) byte
 
@@ -55,7 +57,7 @@ Việc cắt tên đường: nếu `len(utf8) > 0x4F` thì lấy 0x50 byte, sau 
 [6..]  next_road UTF-8 (đúng độ dài thật)
 [..]   u8    len(current_road)
 [..]   current_road UTF-8
-[..]   u16be remain_hours; u8 remain_minutes; u8 remain_seconds
+[..]   u16be remain_hours; u8 remain_minutes; u8 time_third_raw
 [..]   u32be remain_dist_m
 [..]   u16be speed_kmh
 ```
@@ -71,12 +73,15 @@ Việc cắt tên đường: nếu `len(utf8) > 0x4F` thì lấy 0x50 byte, sau 
 [11..]  next_road UTF-8
 [..]    u8    len(current_road)
 [..]    current_road UTF-8
-[..]    u16be remain_hours; u8 remain_minutes; u8 remain_seconds
+[..]    u16be remain_hours; u8 remain_minutes; u8 time_third_raw
 [..]    u32be remain_dist_m
 [..]    u16be speed_kmh
 ```
 
-Header `00 00 00 01 01` là dấu hiệu nhận biết tin cậy của variable2.
+Khối sau direction thực tế là `u32be image_len` + `image_len` byte ảnh/flag.
+Mẫu trên ứng với `image_len=1`, flag=1; không dùng hằng số đó để loại các
+khung có ảnh JPEG custom. Tối thiểu 22 byte, kiểm độ dài ảnh trước khi đọc
+khoảng cách/tên đường. Xem mục 9 và `decode_nav_variable2`.
 
 ## 5. Đáp `getHUDInfo` (CMD 0x0E) là chuỗi text
 
@@ -99,26 +104,34 @@ Header `00 00 00 01 01` là dấu hiệu nhận biết tin cậy của variable2
 | `FW` | firmwareVersion |
 | `PROTOCOL` | protocol |
 | `OBDV` | tách "_" → obdModel + obdVersion |
-| `SID` | **serial** — thứ app đem lên `/v20/hud/UpdatePermission` |
+| `SID` | **serial** trong HUDInfo; quan hệ với API cấp quyền từng họ thiết bị chưa chốt |
 
-Ví dụ đáp emulator: `MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:1.6,OBDV:0_1.0,SID:VMEMU0000001`
+Ví dụ đáp emulator: `MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2S,OBDV:0_1.0,SID:VMEMU0000001`
 
-## 6. MD5 trên khung NHẬN không dùng để gate
+MODEL khác rỗng là điều kiện nhánh native này; chưa chứng minh Dart/server
+chấp nhận thiết bị hoặc sẽ gửi dẫn đường. H50 còn có đường byte-pipe riêng.
+
+## 6. Checksum khung và giới hạn bằng chứng về kiểm tra trên app
 
 Trong `dataParsing`, MD5 được tính (0xd1dc–0xd1fc: subdata đuôi → hash →
 `setGetData:`) nhưng **kết quả không ảnh hưởng luồng xử lý** — khung vẫn được
 dispatch theo CMD dù hash không khớp. Chỉ hai điều kiện dài mới loại khung.
 (Khung GỬI đi vẫn luôn kèm MD5 đúng — xem `vmlhud_frame.py`.)
 
-Điều này giúp emulator: không cần MD5 chuẩn trong khung gửi đi cũng được app
-chấp nhận (vẫn nên gửi chuẩn).
+Nhận xét trên chỉ áp dụng hàm native đã soi, không suy rộng cho H50/Dart.
+Emulator vẫn kiểm checksum mặc định của khung nhận và gửi checksum chuẩn.
+Trailer mới là **8 byte**, không phải MD5 thô 16 byte: mỗi 4 byte là tổng
+modulo 2^32 của bốn word BE trong MD5(header+payload+UID16), một phần theo
+runtime UID và một phần theo default UID. Serial SID không phải runtime UID.
+Tổng khung = payload+21 = lenfield+8. Khung cũ C5 dùng CRC16 Modbus, tổng
+payload+11. Xem `hud_emulator/protocol.py` và `bridge/vmlhud_frame.py`.
 
 ## 7. Bảng CMD đã thấy (app → HUD và HUD → app)
 
 | CMD | Chiều | Ý nghĩa |
 | --- | --- | --- |
 | `0x00` | app → HUD | dẫn đường (fixed hoặc variable1) |
-| `0x02` | app → HUD | heartbeat (payload mang tốc độ; gửi trên cả hai nhánh protocol) |
+| `0x02` | app → HUD | heartbeat (payload mang tốc độ; chọn một nhánh protocol theo trạng thái) |
 | `0x0E` | app → HUD | yêu cầu getHUDInfo (payload 1 byte) |
 | `0x0E` | HUD → app | đáp getHUDInfo (payload text §5) |
 | `0x40` | app → HUD | dẫn đường "Simplify" variable2 |
@@ -132,7 +145,8 @@ chấp nhận (vẫn nên gửi chuẩn).
    mũi tên trên màn app.
 2. **[0xAD..0xAE] của fixed**: suy là `speed u16be` theo đối xứng hai layout
    variable; xác nhận khi bắt được khung fixed.
-3. **Bước cấp quyền** (`SID` → máy chủ): quyết định nhánh A/B của cả kiến trúc
+3. **Profile và cấp quyền**: xác nhận từng bước quét, kết nối, subscribe, HUDInfo
+   và bắt đầu tuyến; thiếu nav chưa chứng minh bị máy chủ từ chối
    (xem `vietmap-hud-bridge.md`).
 
 ## 9. Doi chieu cheo voi APK Android (21-10-2026, bo sung buoi toi)
@@ -142,12 +156,13 @@ Kotlin/Java doc duoc 100% (goi `U7` = manager, `W7` = cac ban protocol). Moi
 khai niem tren day duoc xac nhan lai tung byte:
 
 - **Frame** (`p010a8.c.f`): `A5 5A 37 C3 | len BE (=payload+12, payload da gom
-  CMD) | ts BE | payload (byte [0] = CMD) | MD5(magic..payload)`. Trung khop
-  hoan toan voi iOS.
+  CMD) | ts BE | payload (byte [0] = CMD) | checksum8`. iOS da xac dinh
+  checksum8 nhu muc 6; khong thay bang MD5 tho 16 byte.
 - **Nav payload** (`W7/c.java J()` = protocol 2.2.0/2.2.1, `W7/e.java` = 2.2.2S):
   TLV chi ghi gia tri thoi (khong tag). Thu tu: CMD 0x40, direction u8,
   **u32 image_len**, image/flag, distance u32, len+next_road, len+current_road,
-  h u16 + m u8 + s u8, remain u32, speed u16.
+  h u16 + m u8 + time_third u8, remain u32, speed u16. Y nghia byte
+  time_third phai doi chieu tung builder; khong mac dinh la giay tren iOS.
 - **Semantics khoi "00 00 00 01"**: do la `image_len = 1` = KHONG co anh mui ten
   custom; khi app co anh custom (Android nhan qua `imageBase64`) thi u32 =
   do dai JPEG va anh noi ngay sau do. Byte ke tiep khi image_len==1 la flag
@@ -155,7 +170,8 @@ khai niem tren day duoc xac nhan lai tung byte:
 - **Bang PROTOCOL chon hanh vi** (tu `U7/a.java`, sau khi parse getHUDInfo):
   `2.2.0`/`2.2.1` -> `W7/c`; `2.2.2` -> `W7/d`; `2.2.2S` -> `W7/e`; bat ky gia
   tri khac (gom ca "1.6") -> `W7/b` = **ban toi thieu, `J()` tra null: KHONG
-  gui dan duong, chi heartbeat**. Vi vay emulator phai tra PROTOCOL 2.2.x.
+  gui dan duong, chi heartbeat**. Emulator mac dinh tra 2.2.2S de thu nhanh co nav tren Android; khong
+  suy rong bang nay cho moi nhanh iOS/Dart.
 - **Hai ho thiet bi, hai bo GATT** (tu `Ma/i.java`, `Ma/j.java`):
   - H1/DJBT: service `FFF0` (`FFF2` write / `FFF1` notify / `FFF3` / `FFF4`)
   - H50: service `FFFF` (`9ABC` write / `1234` notify); handler native H50 chi

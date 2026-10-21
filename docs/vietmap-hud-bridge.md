@@ -2,13 +2,13 @@
 
 Mục tiêu: đưa **dẫn đường VIETMAP LIVE (có tên đường)** lên HUD zin của Mazda,
 giống sản phẩm "VML HUD" đang bán ngoài thị trường (ví dụ Bamboo Auto). Đây là
-đường **duy nhất có đủ tên đường** — hơn hẳn CarPlay (iOS không gửi gì) và
-Android Auto (tên đường là `--`). Xem [vietmap-hud-gap.md](vietmap-hud-gap.md).
+đường đang nghiên cứu để lấy đầy đủ tên đường từ VietMap. Với VML 3.4.3 đã soi,
+CarPlay chưa gửi metadata cần thiết và đường Android Auto đã quan sát thiếu
+tên đường. Xem [vietmap-hud-gap.md](vietmap-hud-gap.md).
 
 Phạm vi: tương thích thiết bị của **chính khách** — xe của họ, điện thoại của họ,
-app VIETMAP LIVE họ tự cài. Không bẻ khoá máy chủ Vietmap; nếu bước cấp quyền
-khoá cứng theo serial thật thì dùng **HUD Vietmap thật làm mỏ neo** (mục "Hai
-nhánh" bên dưới), không giả mạo thiết bị.
+app VIETMAP LIVE họ tự cài. Bước cấp quyền còn phải kiểm chứng; không coi việc
+thay serial hay mua HUD thật là cách giải quyết đã được xác nhận.
 
 ## Kiến trúc
 
@@ -28,125 +28,105 @@ com.jci.vbs.navi   (MQ sẵn có — cầu CarPlay đang bơm vào đây)
 HUD zin (Active Driving Display)
 ```
 
-Phần **đầu ra** (`com.jci.vbs.navi` → HUD, kèm bản vá tên đường VN dài trong
-`patches/oem-aa-mod/`) repo đã có. Việc mới chỉ là **đầu vào BLE**.
+Repo có mã tham khảo cho **đầu ra** `com.jci.vbs.navi` → HUD và bản vá tên đường
+VN dài trong `patches/oem-aa-mod/`. Cần tích hợp đầu vào BLE với đường này và
+kiểm thực tế, chưa thể coi đầu ra của nhánh VietMap BLE là hoàn tất.
 
 ## Thành phần trong repo
 
 | File | Vai trò | Trạng thái |
 | --- | --- | --- |
-| `bridge/vmlhud_frame.py` | Mã hoá/giải mã khung `A5 5A 37 C3` (magic, length, timestamp, CMD, payload, MD5) | **Xong**, 36/36 test pass. Lớp khung đã xác nhận từ static analysis |
-| `bridge/vmlhud_nav.py` | Giải mã payload dẫn đường → struct trung lập | **Xong (tĩnh)** — 3 layout chốt từ disassembly, 55/55 test; còn đối chiếu runtime bảng direction |
-| `emu/esp32-hud-emu/` | ESP32 giả lập HUD (GATT FFF0, đáp getHUDInfo, log+giải mã mọi khung) | **Xong** — công cụ cho Việc #1/#2 |
-| `bridge/vmlhud_frame_test.py` | Test tự nhất quán của lớp khung | Xong |
-| (chưa có) `bridge/vmlhud-bridge` | Daemon BLE peripheral trên CMU (BlueZ GATT) + inject `com.jci.vbs.navi` | Chờ chốt giao thức |
+| `bridge/vmlhud_frame.py` | Khung mới: hai checksum 4 byte; khung cũ: CRC16 Modbus | Đối chiếu codec Python/native và vector SDK; chưa có capture từ điện thoại thật |
+| `bridge/vmlhud_nav.py` | Ba layout dẫn đường, kể cả ảnh mũi tên variable2 | Giải mã tĩnh; cần xác nhận bảng direction và đơn vị tốc độ ngoài thực tế |
+| `emu/esp32-hud-emu/` | BLE peripheral FFF0 và FFFF trên ESP32-C3 | Build Arduino ESP32 3.3.2 + NimBLE 2.3.7; chưa thử board/điện thoại thật |
+| `native/` | ATT server chạy trong tiến trình `bds`, chia sẻ UART với TPMS | Đã kiểm bằng transport giả, ARM và guest CMU; chưa xác minh advertising trên xe |
+| `native/usb/` | Kit thử native, thu log, phục hồi wrapper TPMS | Xem [hud-native-cmu.md](hud-native-cmu.md) và [kết quả emu](../native/emu/README.md) |
 
-## Việc #1 — bắt một phiên thật (quyết định mọi thứ)
+Native hiện là công cụ thử kết nối; chưa nối dữ liệu nhận được vào
+`com.jci.vbs.navi`. Phần đầu ra có mã tham khảo trong repo nhưng vẫn phải tích
+hợp và kiểm tra trước khi gọi đây là sản phẩm dẫn đường lên HUD Mazda.
 
-~~Static analysis cho cấu trúc khung nhưng không cho offset từng trường~~
-**Cập nhật 21-10-2026: offset payload đã chốt tĩnh**
-([vmlhud-nav-payloads.md](vmlhud-nav-payloads.md)). Phiên chạy thật (với HUD
-thật HOẶC emulator ESP32) giờ chỉ còn để: chốt bảng `direction`, xác nhận 2
-byte cuối layout fixed, và đối chiếu toàn diện. Cách làm:
+## Bước tiếp theo: thử BLE bằng ESP32-C3
 
-1. **Mua một HUD rời Vietmap thật** (H1AS/H1X/H50… — vài trăm nghìn). Đây vừa là
-   nguồn capture, vừa là mỏ neo cấp quyền hợp lệ cho nhánh B.
-2. Trên Android: bật **Developer options → Enable Bluetooth HCI snoop log**, chạy
-   VIETMAP LIVE kết nối HUD thật, dẫn đường một đoạn có rẽ + đổi tên đường, rồi
-   lấy `btsnoop_hci.log` (qua bug report).
-3. Mở bằng Wireshark, lọc ATT ghi vào characteristic `FFF2`. Mỗi gói bắt đầu
-   `a5 5a 37 c3` là một khung — `vmlhud_frame.parse()` tách được ngay.
-4. Đối chiếu nội dung dẫn đường đang hiện trên app với byte trong payload CMD
-   `0x00` để **chốt offset**: hướng rẽ, khoảng cách, tên đường hiện tại/tiếp
-   theo, thời gian/quãng còn lại, tốc độ; và CMD camera cho biển báo tốc độ.
-   Điền vào `decode_nav_fixed`/`decode_nav_variable`, thêm test với chính byte
-   capture được.
+Nạp [firmware và hướng dẫn](../emu/esp32-hud-emu/README.vi.md) vào board C3
+đang có. C3 hỗ trợ BLE peripheral, **không hỗ trợ Bluetooth Classic/SPP**.
+Phép thử này tách việc app chấp nhận profile HUD khỏi khả năng Bluetooth CMU.
 
-Không có HUD thật thì chỉ dừng ở lớp khung; không thể bảo đảm đúng trên xe khách.
+1. Giữ cấu hình thử mặc định `VMHUD-EMU`, model H50, protocol 2.2.2S.
+2. Thu Serial 115200 từ trước khi mở trang HUD trong VIETMAP LIVE.
+3. Quét, kết nối và bắt đầu một tuyến có tên đường/hướng rẽ.
+4. Giữ log từ kết nối, subscribe, yêu cầu HUDInfo đến các lần ghi FFF2/FFF3
+   hoặc 9ABC. Công cụ `decode_log.py` xuất JSON để đối chiếu tên đường,
+   khoảng cách và `direction` với app.
 
-## Việc #2 — test bước cấp quyền (xác định nhánh A hay B)
+Nhận được CMD 0x00/0x40 hợp lệ có tên đường chứng minh app đã gửi dữ liệu cho
+**profile và phiên thử đó**. Không nhận được dẫn đường chưa xác định nguyên
+nhân: có thể do bộ lọc quét, họ thiết bị, subscribe, phiên dẫn đường, protocol,
+hoặc cấp quyền. Cần giữ thông báo của app cùng log để phân biệt.
 
-Công cụ sẵn sàng: nạp `emu/esp32-hud-emu` vào ESP32 (không cần HUD thật cho
-thí nghiệm đầu). Đáp getHUDInfo của emulator trả đúng định dạng text mà app
-phân tích (kể cả `SID` tuỳ cấu hình qua serial).
+## Quyền sử dụng và HUD thật
 
-App có luồng xin quyền phía máy chủ (`/v20/hud/UpdatePermission`, `verifyHUD`,
-`onInvalidHUDConnected`, "HUD not start auto connect when unauth" — xem
-[vietmap-hud-sdk.md](vietmap-hud-sdk.md)). Câu hỏi: nó **khoá cứng** hay chỉ
-**đăng ký dễ dãi**? Sản phẩm bán ngoài chợ ⇒ nhiều khả năng dễ dãi. Kiểm chứng:
+IPA có dấu vết `verifyHUD`, `onInvalidHUDConnected` và
+`/v20/hud/UpdatePermission`; xem [phân tích SDK](vietmap-hud-sdk.md). Dấu vết
+này chưa chứng minh `SID` của mọi họ thiết bị được gửi tới endpoint đó, cũng
+chưa chứng minh mọi phiên dẫn đường đều bị chặn bởi kiểm tra serial. HCI snoop
+chỉ thấy giao thức Bluetooth, không cho biết trực tiếp nội dung yêu cầu HTTPS.
 
-- Trong `btsnoop` ở Việc #1, xem app có gọi API cấp quyền **trước khi** gửi
-  dẫn đường không, và serial nó đọc từ HUD nằm ở đâu (đáp `getHUDInfo` 0x0E).
-- Cho daemn CMU quảng bá tên `...HUD...`, trả `getHUDInfo` với **cùng serial của
-  HUD thật mình đang sở hữu** (serial của chính mình, không bịa của người khác),
-  xem app có chịu gửi dẫn đường không.
-  - **Chịu gửi ⇒ nhánh A.** Server chỉ đăng ký, không khoá. CMU đóng vai HUD
-    trực tiếp, không cần phần cứng thêm. (Gần như chắc đây là cái Bamboo Auto làm.)
-  - **Không gửi ⇒ nhánh B.** Server khoá theo serial hợp lệ. Không bịa serial.
+Nếu cần đối chiếu, HUD thật của chủ xe là nguồn capture tốt. Trên Android có
+thể lấy Bluetooth HCI snoop/bug report và giải mã ATT trong Wireshark. Khung có
+thể bị chia qua nhiều write; phải gom luồng trước khi parse. Việc này bổ sung
+cho thử C3, không phải điều kiện bắt buộc để bắt đầu.
 
-## Hai nhánh
+Cầu nối qua HUD thật là một phương án nghiên cứu khác, **chưa được triển
+khai**. CMU không tự đọc được phiên BLE giữa hai thiết bị khác; nghe thụ động
+cũng không bảo đảm giải mã được khi mã hoá liên kết bật. Relay chủ động cần
+thiết kế, hai phiên kết nối và kiểm tra quyền riêng; mua HUD không tự giải
+quyết các phần đó.
 
-**Nhánh A — CMU đóng vai HUD (nếu cổng cấp quyền dễ dãi).**
-`vmlhud-bridge` là BLE peripheral đầy đủ: quảng bá, `getHUDInfo`, heartbeat, nhận
-dẫn đường, inject HUD. Khách chỉ cần bật VIETMAP LIVE + BLE. Không phần cứng thêm.
+## Khả năng Bluetooth của CMU: phân biệt bằng chứng tĩnh và chạy thật
 
-**Nhánh B — cầu nối từ HUD thật (nếu cổng khoá cứng).**
-Để HUD Vietmap thật kết nối app bình thường (được cấp quyền thật), CMU **nghe
-cùng phiên BLE** / đặt giữa (app ↔ HUD thật), đọc khung dẫn đường **của chính
-người dùng trên thiết bị của họ**, rồi inject lên HUD zin. HUD thật nằm trong
-vòng nên không giả mạo gì. Tốn thêm một HUD rời nhỏ nhưng chắc chắn hợp lệ.
+Đã đọc rootfs 74.00.333A; các kết quả dưới đây không thay thế kiểm tra controller
+trên xe:
 
-Cùng một `vmlhud_frame.py` + `vmlhud_nav.py` dùng cho cả hai nhánh; chỉ khác chỗ
-daemon lấy byte từ đâu (tự nhận hay nghe ké).
+| Hạng mục | Quan sát | Điều còn chưa biết |
+| --- | --- | --- |
+| BlueZ | 4.98; thiếu API D-Bus `GattManager1`/`LEAdvertisingManager1` của BlueZ 5 | Không thể dùng nguyên backend GATT BlueZ 5 trên CMU |
+| Kernel | 3.0.35, i.MX6; có module Bluetooth/RFCOMM/shared transport TI | Module hiện diện không chứng minh adapter BlueZ đang hoạt động |
+| Cấu hình ATT | `AttributeServer = false` trong `main.conf` | Tắt server thử nghiệm của BlueZ; không kết luận toàn bộ đường Bluetooth của Mazda chỉ có Classic |
+| Lệnh LE | Có chuỗi lệnh quảng bá trong binary, `hcitool` có lệnh LE | Đây là code hỗ trợ lệnh; chưa chứng minh controller/firmware chấp nhận advertising |
+| SPP | Có `rfcomm.ko`, `sdptool`, `rfcomm`, plugin Serial | Cần adapter dùng được, đăng ký SDP và phiên VietMap Android thực sự chọn SPP |
+| Đường Mazda | `bds` dùng UART `/dev/ttymxc3`, nạp `/jci/bds/TI128x_INIT.bts` | Không được giả định BlueZ cũng sở hữu radio hoặc có thể dùng đồng thời |
 
-## Khả năng Bluetooth của CMU (xác nhận từ rootfs 74.00.333A)
+`/jci/bds/TI128x_INIT.bts` (TI P6_15.113) là đường firmware mà `bds` nạp.
+`/lib/firmware/TIInit_10.6.15.bts` (P6_15.42) chỉ là file khác hiện diện trong
+rootfs. Hai file gốc đã soi chưa có BLE add-on như bản TPMS vá. TPMS cung cấp
+bằng chứng sử dụng BLE **central** sau khi vá, không chứng minh peripheral hay
+HFP/A2DP cùng advertising hoạt động.
 
-Soi stack BT trong firmware (`usr/sbin/bluetoothd`, `etc/bluetooth/main.conf`,
-`lib/modules/3.0.35`):
+- **Android:** SDK có nhánh SPP UUID 1101, nhưng chưa đủ để chọn SPP cho app,
+  model và controller thực tế. Chỉ viết server sau khi xác định app dùng nhánh
+  đó và ai sở hữu radio. Chưa thể khẳng định chạy ngay trên stack zin.
+- **iPhone:** app thường không dùng được generic SPP cho phụ kiện chưa có hỗ
+  trợ MFi phù hợp. BLE vẫn là hướng thử; C3 hiện là cách kiểm profile độc lập.
+  Native ATT/raw-HCI qua `bds` đã có bản thử trong repo, chưa xác minh trên xe.
+  Chưa có căn cứ kết luận bắt buộc phải mua HUD thật.
+- **Chung sống với nhạc/cuộc gọi:** phải thử trên xe. Emu CMU kiểm được ABI,
+  installer, log và rollback nhưng không tái hiện radio TI hay HFP/A2DP/LE
+  đồng thời.
 
-| Hạng mục | Kết quả |
-| --- | --- |
-| BlueZ | **4.98** (cũ; không có D-Bus GATT API kiểu BlueZ 5 — `GattManager1`/`LEAdvertisingManager1` không có) |
-| Kernel / nền | **3.0.35**, i.MX6; module `bluetooth.ko`, `rfcomm.ko`, `bnep.ko`, `hidp.ko`, `hci_uart.ko`, `ti-st/tty_hci.ko` |
-| Chip BT | **TI WiLink** (shared transport), firmware `TIInit_10.6.15.bts` |
-| LE ở mức HCI | **Có.** bluetoothd có `LE Set Advertise Enable/Data/Parameters`, `hcitool` có `lescan/lecc/lewladd` → controller **quảng bá được** (peripheral ở mức HCI) |
-| GATT/ATT server | **Tắt.** `AttributeServer = false` trong `main.conf` (BlueZ: "chỉ là thử nghiệm"). Stack cấu hình classic-only |
-| SPP / RFCOMM classic | **Đầy đủ.** plugin `org.bluez.Serial`/`SerialProxy`, `rfcomm.ko`, `sdptool`, `rfcomm`, `serial.conf` |
+## Tích hợp trên CMU sau khi có capture
 
-**Kết luận: transport quyết định độ khó, và nó gắn với HĐH điện thoại khách.**
-
-- **SPP classic (điện thoại Android) — khả thi trên stack zin.** SDK Vietmap có
-  đường **SPP classic (UUID `00001101`)** song song BLE. Nếu VIETMAP LIVE Android
-  nối HUD qua SPP, CMU host một RFCOMM/SPP server (đăng ký SDP record `1101`,
-  nhận kết nối, bơm khung `A5 5A 37 C3`) — **không cần đụng BlueZ/kernel**. Codec
-  `vmlhud_frame.py` dùng chung, vì khung độc lập với transport. Đây nhiều khả năng
-  là đường một sản phẩm nhắm Android đang chạy.
-- **BLE peripheral (iPhone; HUD chỉ-BLE) — khó trên stack này.** iOS không cho
-  phụ kiện SPP nếu không có MFi, nên iPhone chỉ đi BLE. Mà GATT server zin đang
-  tắt và BlueZ 4.98 không có API GATT dùng được. Chỉ còn hai lối:
-  1. **Raw HCI**: tự `LE Set Advertising` (controller làm được) + viết **ATT
-     server trong userspace trên socket L2CAP LE** (CID 4, kiểu bleno). Kernel
-     3.0.35 hỗ trợ LE peripheral tới đâu thì **phải thử trên phần cứng** — rủi ro.
-  2. **Nhánh B — HUD Vietmap thật làm mỏ neo** (xem trên). Chắc ăn cho iPhone.
-- **Chung sống với điện thoại:** BT của CMU đang bận HFP/A2DP/PBAP. Việc host SPP
-  server / advertise LE **đồng thời** với cuộc gọi/nhạc, và việc `jci` BT manager
-  có nhường adapter cho một daemon lạ không, **phải kiểm trên xe/emu**.
-
-Vì vậy, câu hỏi định hướng tiếp theo là **khách chủ yếu dùng Android hay iPhone**:
-Android → đi SPP (dễ); iPhone → raw-HCI BLE (khó) hoặc nhánh B.
-
-## Việc #3 — daemon trên CMU
-
-- Transport theo bảng trên: Android → **RFCOMM/SPP server** (dễ, stack zin);
-  iPhone → **BLE raw-HCI** hoặc **nhánh B**. Kiểm việc chung sống với HFP/A2DP
-  trên emu/rootfs trước (xem `docs/emu-yeu-cau.md`).
-- Inject: dùng đúng đường `com.jci.vbs.navi` mà cầu CarPlay đang dùng — đọc cách
-  nó đóng gói guidance rồi tái sử dụng.
-- Đóng gói: thêm một kit cài USB thứ ba bên cạnh AA/CarPlay, cùng cơ chế
-  `install-patches.sh` (màn chọn kit đã có).
+1. Đối chiếu khung C3/capture với codec, chốt mã hướng rẽ và profile app dùng.
+2. Dùng kit native để truy vấn controller, thử advertising/ATT có log và
+   rollback; giữ TPMS nguyên bản làm đường phục hồi.
+3. Khi transport thật đã nhận được dẫn đường, chuyển struct trung lập sang
+   thông điệp `com.jci.vbs.navi`, kiểm tên đường, khoảng cách và hướng rẽ.
+4. Kiểm cuộc gọi/nhạc, kết nối lại, ngừng dẫn đường và phục hồi trên xe trước
+   khi tích hợp vào installer ổn định.
 
 ## Ranh giới
 
 Tài liệu và mã ở đây **không** mô tả cách qua mặt bước xác thực của máy chủ
-Vietmap. Nếu Việc #2 cho thấy server khoá cứng, đi **nhánh B** (HUD thật làm mỏ
-neo), không bịa/forge serial của thiết bị người khác.
+Vietmap. Dùng thiết bị/tài khoản của chủ xe; cấu hình emulator là danh tính
+thử nghiệm. Nếu app từ chối, giữ log để tìm nguyên nhân và chọn phương án
+được hỗ trợ, không coi việc sửa serial là giải pháp đã được kiểm chứng.

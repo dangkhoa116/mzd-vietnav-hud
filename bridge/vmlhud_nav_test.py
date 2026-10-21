@@ -59,7 +59,8 @@ for name, body in [("fixed", fx), ("variable1", v1), ("variable2", v2)]:
     check("%s distance" % name, info.distance_m == 350)
     check("%s next_road" % name, info.next_road == "Le Dai Hanh")
     check("%s current_road" % name, info.current_road == "Nguyen Van Linh")
-    check("%s remain_time" % name, info.remain_time_s == 1234)
+    check("%s remain_time" % name, info.remain_time_s == (1234 if name == 'fixed' else None))
+    check("%s raw time" % name, (info.remain_hours, info.remain_minutes, info.remain_time_third_raw) == (0,20,34))
     check("%s remain_dist" % name, info.remain_dist_m == 5678)
     check("%s speed" % name, info.speed_kmh == 61)
     check("%s layout nhan dang" % name, info.layout == name)
@@ -74,7 +75,7 @@ for name, body in [("fixed", N.build_nav_fixed(nav_vn)),
     info = N.decode_nav(body)
     check("%s VN next_road" % name, info.next_road == "Phố đi bộ")
     check("%s VN current_road" % name, info.current_road == "Đường Nguyễn Huệ")
-    check("%s VN remain_time 3661s" % name, info.remain_time_s == 3661)
+    check("%s VN remain_time" % name, info.remain_time_s == (3661 if name == 'fixed' else None))
 
 # --- ten duong qua dai: fixed cat 0x50, variable cat 255 ---
 long_road = "X" * 300
@@ -93,7 +94,7 @@ check("v2+anh direction", info.direction == 12)
 check("v2+anh distance", info.distance_m == 350)
 check("v2+anh next_road", info.next_road == "Le Dai Hanh")
 check("v2+anh current_road", info.current_road == "Nguyen Van Linh")
-check("v2+anh remain", info.remain_time_s == 1234 and info.remain_dist_m == 5678)
+check("v2+anh remain", info.remain_time_s is None and info.remain_time_third_raw == 34 and info.remain_dist_m == 5678)
 check("v2+anh speed", info.speed_kmh == 61)
 info = N.decode_nav(v2img)
 check("v2+anh auto-detect", info.layout == "variable2")

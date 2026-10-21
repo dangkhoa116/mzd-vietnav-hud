@@ -27,3 +27,4 @@ desktop.ini
 installer/dist/
 __pycache__/
 *.pyc
+.venv-hud/

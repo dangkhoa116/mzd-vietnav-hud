@@ -1,0 +1,142 @@
+--- a/v3.c
++++ b/v3.c
+@@ -108,6 +108,16 @@
+ #include <unistd.h>
+ #include <sys/select.h>
+ #include <sys/stat.h>
++#include "hud_native.h"
++static struct vn_hud vn_native;
++static struct vn_caps vn_cap;
++static int vn_mode, vn_started;
++static void vn_setup(void);
++static void vn_cap_reply(unsigned, const unsigned char *, unsigned);
++static void vn_native_tick(void);
++static void vn_native_reply(const unsigned char *, unsigned);
++static void vn_native_connect(const unsigned char *, unsigned);
++static void vn_native_credits(const unsigned char *, unsigned);
+ #include <sys/time.h>
+ #include <sys/uio.h>
+ 
+@@ -824,6 +834,13 @@
+ static void inj_abort(const char *why)
+ {
+     if (st == S_FAIL) return;
++    if (vn_started) {
++        vn_stop(&vn_native, why);
++        vn_tick(&vn_native, now_ms(), 1);
++        st = S_FAIL;
++        emit_mark2("ABORT ", why);
++        return;
++    }
+     st = S_FAIL;
+     emit_mark2("ABORT ", why);
+     if (scan_on && !disable_sent) {
+@@ -856,7 +873,7 @@
+     wbs_seen = 1;
+     if (!ready) return;
+     emit_mark("wbs patch opened: the BLE core's RAM is being reused");
+-    if ((scan_on || our_handle >= 0) && st != S_FAIL)
++    if ((scan_on || our_handle >= 0 || (vn_started && vn_native.adv_maybe_on)) && st != S_FAIL)
+         inj_abort("wbs patch load");
+     else if (st != S_FAIL && st != S_DONE)
+         emit_mark("standing down before the download");
+@@ -1061,6 +1078,7 @@
+ 
+ static void att_in(const unsigned char *p, unsigned n)
+ {
++    if (vn_started) { vn_att(&vn_native, p, n); return; }
+     if (!n) return;
+     /* a notification is logged as its frame (emit_frame), once per change
+      * in stay mode; the raw copy would be one line per frame for hours */
+@@ -1393,6 +1411,8 @@
+  * itself, because the first steps are questions whose answers we read. */
+ static void step_done(const unsigned char *p, unsigned n)
+ {
++    vn_cap_reply((unsigned)step, p, n);
++    if (vn_started) return;
+     switch (step) {
+     case ST_HS_READ:
+     case ST_HS_CHECK:
+@@ -1534,6 +1554,7 @@
+     int is_status = (p[1] == 0x0F);
+ 
+     emit_pkt("A", p, n);
++    if (vn_started) { vn_native_reply(p, n); return; }
+     if (st != S_WAITCC) return;
+ 
+     status = is_status ? p[3] : (n >= 7 ? p[6] : 0xff);
+@@ -1612,6 +1633,7 @@
+ /* LE_Connection_Complete: the link is up (or it failed) */
+ static void conn_complete(const unsigned char *p, unsigned n)
+ {
++    if (vn_started) { vn_native_connect(p, n); return; }
+     if (n < 7) return;
+     if (p[4] != 0x00) {
+         emit_mark_u("connection failed, status ", p[4]);
+@@ -1757,6 +1779,7 @@
+ static void inj_tick(void)
+ {
+     uint64_t now;
++    if (vn_started) { vn_native_tick(); return; }
+ 
+     /* our own part of the run can end before the download has settled; the
+      * census is bds's, not ours, so it still has to be said */
+@@ -1846,6 +1869,8 @@
+ {
+     uint64_t now, t;
+ 
++    if (vn_started)
++        return (vn_native.state == VN_DONE || vn_native.state == VN_FAILED) ? -1 : 50;
+     if (st == S_DONE || st == S_FAIL) return -1;
+     now = now_ms();
+     if (st == S_WAITCC)        t = inj_sent_ms + CC_TIMEOUT;
+@@ -1875,6 +1900,7 @@
+ static int claims_opcode(uint16_t op)
+ {
+     if (!le_claim) return 0;
++    if (vn_started && vn_native.pending == op) return 1;
+     /* every LE opcode is ours: nothing on this car sends one. HCI_Disconnect
+      * is shared with bds, so it is claimed only while we are waiting for
+      * our own disconnect to be acknowledged. */
+@@ -1973,6 +1999,7 @@
+             emit_pkt("# an LE event we did not ask for:", p, n < 4 ? n : 4);
+         } else if (p[1] == 0x05) {
+             emit_mark("the link to the box is down");
++            if (vn_started) vn_disconnected(&vn_native, (unsigned)our_handle);
+             our_handle = -1;
+             l2_len = l2_want = 0;
+             emit_hb("absent");
+@@ -1985,6 +2012,7 @@
+         return;
+     }
+ 
++    vn_native_credits(p, n);
+     /* a credit event may mention our link next to bds's: take ours out */
+     if (p[0] == 0x04 && p[1] == 0x13 && rewrite_ncp(p, &n)) {
+         n_swallowed += rx_len - n;
+@@ -2221,6 +2249,8 @@
+     return *s ? def : v;
+ }
+ 
++#include "tpms_adapter.inc"
++
+ static void read_stop(void)
+ {
+     const char *s = getenv("TPMS_V3_STOP");
+@@ -2310,6 +2340,7 @@
+     } else {
+         emit_mark("bts swap: off (bds reads the car's own service pack)");
+     }
++    vn_setup();
+     env = getenv("TPMS_V3_TAG");
+     if (env && *env) emit_line("tag ", env);
+ }
+@@ -2420,7 +2451,7 @@
+     if (fd >= 0 && uart_is(fd)) {
+         uart_del(fd);
+         if (fd == the_uart) {
+-            if ((scan_on || our_handle >= 0) && st != S_FAIL)
++            if ((scan_on || our_handle >= 0 || (vn_started && vn_native.adv_maybe_on)) && st != S_FAIL)
+                 inj_abort("uart closing while we are still on the air");
+             the_uart = -1;
+         }

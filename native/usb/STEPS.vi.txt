@@ -1,0 +1,48 @@
+VIETNAV native HUD BLE - ban thu 0.1.0
+
+Muc tieu lan nay: kiem controller, de VietMap tim thay VIETNAV HUD,
+bat tay va luu du lieu dan duong. CHUA hien huong re len HUD Mazda.
+Chua thu voi radio Mazda/iPhone that; TPMS tam nghi trong lan thu HUD.
+
+Chuan bi
+- USB FAT32 RIENG, trong. Giai nen noi dung ZIP vao goc USB.
+  Khong gop vao USB TPMS/CarPlay/Vietnav 0.9.1 dang dung.
+- Can TPMS v3 native da cai voi wrapper dung ban duoc ho tro va BLE pack.
+  Installer tu kiem tra; thieu hoac khac ban thi tu choi.
+- Dung xe, bat ACC, doi man hinh san sang. Chi cam mot USB TouchTune.
+  Boot trigger dung co che TouchTune cua cac kit truoc; firmware chua
+  duoc kiem thu tren xe khong duoc dam bao tuong thich.
+
+1. Cam USB, cho menu VIETNAV HUD - THU BLE.
+   Chon KIEM TRA > DAT LICH. Rut USB sau thong bao thanh cong.
+2. Tat xe, mo cua, cho man hinh tat han, doi them 30 giay, roi mo xe.
+   Doi 2 phut de BLE khoi tao va ghi ket qua kiem tra.
+3. Tat/mo xe nhu tren lan nua de tro ve TPMS. Cam USB.
+   Chon KHAC > LUU LOG de luu ket qua vao native-hud-logs.
+   Chi khi query thanh cong moi cho phep chon KET NOI.
+4. Chon KET NOI > DAT LICH. Rut USB, tat/mo xe nhu buoc 2.
+   Sau 60-90 giay, vao muc ket noi HUD trong VietMap Live tren iPhone,
+   tim VIETNAV HUD, ket noi, bat dau mot lo trinh.
+   Cua so thu toi da 180 giay tinh sau khoi tao BLE; ngat ket noi thi dung.
+5. Cam lai USB, chon KHAC > LUU LOG. Gui thu muc native-hud-logs
+   va native-touch.log de xac nhan bat tay/navigation/camera thuc te.
+   Lan khoi dong tiep theo tu quay ve TPMS.
+
+GO BO: KHAC > GO BO, xac nhan, rut USB va tat/mo xe.
+HUY LICH: KHAC > HUY LICH huy lan thu chua chay. Khong dung ngay
+tien trinh dang chay; tat/mo xe de quay lai TPMS.
+
+Ban thu khong ghi de libtpms-v3.so, bds.real, BLE pack hay config TPMS.
+Backup wrapper cu: /jci/bds/bds.vietnav-prev.
+Log/transaction: /data_persist/vietnav-native.
+Go ban thu nay truoc khi cap nhat/go TPMS. Neu wrapper bi tool khac sua,
+go bo tu choi ghi de; giu nguyen backup va gui log de doi chieu.
+Neu bao RESTORE_INCOMPLETE, khong xoa backup/USB, gui log de khoi phuc.
+
+Khong tu reboot/kill bds tu menu. Watchdog chi dung PID cua lan thu
+da xac minh neu mat nhip/log; lan start tiep theo dung wrapper TPMS.
+Khong bao dam TPMS/wireless CarPlay/phone hoat dong dong thoi khi thu HUD.
+Chua nop ban thu nay vao bo cai on dinh 0.9.1.
+
+Tac gia: dangkhoa116. Native: AGPL-3.0-or-later; base TPMS: MIT.
+TouchTune trigger: Miatafy/TouchTune, GPL-3.0. Xem NOTICE va source archive.

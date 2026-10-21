@@ -1,6 +1,6 @@
 # vmlhud_frame_test.py - test cho bo codec khung. Chay:  python3 vmlhud_frame_test.py
 #
-# Day la test TU NHAT QUAN cua lop khung (round-trip, MD5, tach stream). No
+# Day la test TU NHAT QUAN cua lop khung (round-trip, checksum, tach stream). No
 # KHONG chung minh offset payload dan duong dung - cai do can capture that.
 
 import struct
@@ -40,7 +40,7 @@ check("magic", fr[:4] == bytes((0xA5, 0x5A, 0x37, 0xC3)))
 check("length BE", fr[4:8] == struct.pack(">I", 1 + F.LEN_ADDEND))
 check("ts BE", fr[8:12] == struct.pack(">I", 0x11223344))
 check("cmd byte", fr[12] == 0x0E)
-check("md5 16 byte cuoi", len(fr) == F.HEADER_LEN + 1 + F.MD5_LEN)
+check("trailer 8 byte checksum", len(fr) == F.HEADER_LEN + 1 + F.TRAILER_LEN)
 
 # --- MD5 hong thi bi tu choi ---
 bad = bytearray(F.build(0x00, b"abc"))
@@ -78,7 +78,7 @@ pl = N.build_nav_variable(nav_in)
 nav = N.decode_nav_variable(pl)
 check("nav dir", nav.direction == 3)
 check("nav distance", nav.distance_m == 120)
-check("nav remain_time", nav.remain_time_s == 540)
+check("nav remain_time raw", nav.remain_time_s is None and nav.remain_minutes == 9)
 check("nav remain_dist", nav.remain_dist_m == 2300)
 check("nav speed", nav.speed_kmh == 48)
 check("nav current_road", nav.current_road == "Vo Van Kiet")

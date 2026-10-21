@@ -1,10 +1,41 @@
 # mzd-vietnav-hud
 
-**Bring Vietnamese navigation onto the factory Mazda head-up display (Active Driving Display)** — for any Vietnamese navigation app: VIETMAP LIVE, Waze, Google Maps. Both phone platforms: **Android Auto** (GAL 1.6) and **Apple CarPlay** (iAP2).
+**Compatibility research for Vietnamese navigation on the factory Mazda head-up display (Active Driving Display)** through **Android Auto** (GAL 1.6), **Apple CarPlay** (iAP2), and an experimental BLE HUD peripheral for VIETMAP LIVE.
 
 English | [Tiếng Việt](README.vi.md)
 
+[Continue on a local machine: handoff, setup and next steps (Vietnamese)](CONTINUE-LOCAL.vi.md).
+
 > Compatibility research and patches for Mazda Connect CMU150 (MZD Connect; CX-5 KF / CX-8 and same-platform units). Not affiliated with Mazda, Vietmap, Google or Apple.
+
+## In progress: VietMap BLE HUD emulation
+
+The Linux/BlueZ `VIETNAV HUD` prototype and offline decoder implement the HUD
+wire formats found in the supplied VML 3.4.3 IPA, including navigation, road
+names and camera data. All 21 codec/CLI/D-Bus tests pass. **Phone acceptance over
+real BLE and Mazda HUD output for this path remain unverified.** See the
+[runbook and remaining work](docs/hud-emulator.md) (Vietnamese).
+
+The [SDK notes](docs/vietmap-hud-sdk.md) correct the old checksum description
+and distinguish evidence of a permission flow from an unverified claim that
+every emulated HUD is rejected. The existing CarPlay bridge works with Google
+Maps/Apple Maps on the tested car; VML 3.4.3 does not supply the needed CarPlay
+metadata. The BLE prototype is separate from the 0.9.1 USB installer.
+
+The [native CMU implementation](native/README.md) reuses the TPMS HCI mux for
+advertising, one peripheral connection, GATT and HUDInfo exchange. It builds
+with m3-toolchain/glibc 2.11: 70 host tests, 229 mux checks and 5 ARM/QEMU
+transport tests pass. A [dedicated USB trial kit](native/usb/README.md) adds
+query-first gating, a single native start, log collection and TPMS rollback.
+Real BLE validation and VBS output for this path remain outstanding.
+
+For the ESP32-C3 Mini already available, use the [C3 firmware and capture
+guide](emu/esp32-hud-emu/README.vi.md). Both the default legacy-advertising
+build and optional extended diagnostic compile with Arduino-ESP32 3.3.2 /
+NimBLE 2.3.7. The shared C++ codec passes sanitizer checks, frozen SDK vectors,
+Python cross-checks and 50,000 malformed inputs. Hardware/app acceptance is
+still unverified. C3 supports BLE, not Classic SPP; stock CMU SPP capability
+also remains conditional on controller ownership and the app's actual profile.
 
 ## Background
 
@@ -29,6 +60,12 @@ docs/
   vietmap-hud-gap.md           Diagnosis of "VIETMAP LIVE shows no street name" (tiếng Việt)
   vietmap-live-internals.md    VIETMAP LIVE 3.4.3 static-analysis profile (tiếng Việt)
   vmlhud-nav-payloads.md       HUD BLE nav payload layouts — pinned by disassembly (tiếng Việt)
+  vietmap-hud-sdk.md           HUD wire formats and permission evidence (tiếng Việt)
+  hud-emulator.md              BLE prototype runbook and limitations (tiếng Việt)
+hud_emulator/
+  protocol.py                  Legacy/new HUD codec; navigation/camera decoder
+  bluez.py                     Linux/BlueZ peripheral and JSON Lines capture
+  __main__.py                  CLI: ble / decode
 patches/
   oem-aa-mod/
     0001-hud-nav16-road-budget-64-to-256.patch   Long-VN-road-name fix
@@ -43,12 +80,14 @@ installer/
   libpatch.conf.vn             VN runtime config (no nav SD: vbs transport, GAL 1.6)
   VIETNAV-STEPS.txt / .vi.txt  In-car instructions
 bridge/                        VIETMAP HUD BLE frame + nav-payload codec (Python, host-tested)
-emu/esp32-hud-emu/             ESP32 firmware that emulates a VIETMAP HUD (GATT FFF0,
-                               answers getHUDInfo, logs/decodes every frame) — the tool
-                               for the permission-gate test and runtime offset checks
+emu/esp32-hud-emu/             ESP32-C3 firmware, FFF0 + FFFF, HUDInfo, frame/nav logs
+                               build.py packages firmware + source; capture_serial.py
+                               saves Serial; decode_log.py exports JSON Lines
 tests/
   road_fold_test.cpp           Host test for the patch (zig cc, runs on a PC)
   test_installer.py            Installer/rollback/launcher against a fake CMU
+  test_hud_protocol.py         17 codec/CLI tests with synthetic inputs
+  test_hud_bluez.py            4 D-Bus/session tests without a BLE radio
   shim/sys/                    Minimal POSIX shims so the test builds on Windows
   Makefile
 ```

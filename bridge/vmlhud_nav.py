@@ -23,7 +23,10 @@ class NavInfo:
     distance_m: int = 0         # khoang cach toi diem re, met
     current_road: str = ""      # ten duong hien tai (UTF-8)
     next_road: str = ""         # ten duong tiep theo
-    remain_time_s: int = 0      # thoi gian con lai, giay
+    remain_time_s: int | None = 0  # None for variable layouts: iOS third time byte is not seconds
+    remain_hours: int = 0
+    remain_minutes: int = 0
+    remain_time_third_raw: int = 0
     remain_dist_m: int = 0      # quang con lai, met
     speed_kmh: int = 0          # toc do hien tai
     speed_limit_kmh: int = 0    # bien bao toc do (tu sendCameraInformation)
@@ -76,6 +79,7 @@ def decode_nav_fixed(payload):
         direction=direction, distance_m=distance_m,
         current_road=current_road, next_road=next_road,
         remain_time_s=_hms_to_s(hours, minutes, seconds),
+        remain_hours=hours, remain_minutes=minutes, remain_time_third_raw=seconds,
         remain_dist_m=remain_dist_m, speed_kmh=speed_kmh,
         layout="fixed", raw=payload[:FIXED_LEN])
 
@@ -95,14 +99,18 @@ def decode_nav_fixed(payload):
 # ---------------------------------------------------------------------------
 def decode_nav_variable(payload):
     """Dinh dang variable v1 (CMD 0x00). Do dai moi ten duong la byte dan dau."""
-    if len(payload) < 16:
+    if len(payload) < 17:
         raise ValueError("payload variable qua ngan: %d" % len(payload))
     o = 0
     direction = payload[o]; o += 1
     (distance_m,) = struct.unpack_from(">I", payload, o); o += 4
     ln_next = payload[o]; o += 1
+    if o + ln_next >= len(payload):
+        raise ValueError("next road exceeds payload")
     next_road = payload[o:o + ln_next]; o += ln_next
     ln_cur = payload[o]; o += 1
+    if o + ln_cur + 10 > len(payload):
+        raise ValueError("current road/tail exceeds payload")
     current_road = payload[o:o + ln_cur]; o += ln_cur
     hours, = struct.unpack_from(">H", payload, o)
     minutes = payload[o + 2]
@@ -115,7 +123,8 @@ def decode_nav_variable(payload):
     return NavInfo(
         direction=direction, distance_m=distance_m,
         current_road=_utf8(current_road), next_road=_utf8(next_road),
-        remain_time_s=_hms_to_s(hours, minutes, seconds),
+        remain_time_s=None, remain_hours=hours, remain_minutes=minutes,
+        remain_time_third_raw=seconds,
         remain_dist_m=remain_dist_m, speed_kmh=speed_kmh,
         layout="variable1", raw=payload[:end])
 
@@ -143,7 +152,7 @@ def decode_nav_variable(payload):
 #   u32be remain_dist_m; u16be speed_kmh
 # ---------------------------------------------------------------------------
 def decode_nav_variable2(payload):
-    if len(payload) < 21:
+    if len(payload) < 22:
         raise ValueError("payload variable2 qua ngan: %d" % len(payload))
     (image_len,) = struct.unpack_from(">I", payload, 1)
     if image_len == 1:
@@ -159,9 +168,15 @@ def decode_nav_variable2(payload):
     direction = payload[0]
     (distance_m,) = struct.unpack_from(">I", payload, dist_off)
     o = dist_off + 4
+    if o >= len(payload):
+        raise ValueError("missing next road length")
     ln_next = payload[o]; o += 1
+    if o + ln_next >= len(payload):
+        raise ValueError("next road exceeds payload")
     next_road = payload[o:o + ln_next]; o += ln_next
     ln_cur = payload[o]; o += 1
+    if o + ln_cur + 10 > len(payload):
+        raise ValueError("current road/tail exceeds payload")
     current_road = payload[o:o + ln_cur]; o += ln_cur
     hours, = struct.unpack_from(">H", payload, o)
     minutes = payload[o + 2]
@@ -174,7 +189,8 @@ def decode_nav_variable2(payload):
     return NavInfo(
         direction=direction, distance_m=distance_m,
         current_road=_utf8(current_road), next_road=_utf8(next_road),
-        remain_time_s=_hms_to_s(hours, minutes, seconds),
+        remain_time_s=None, remain_hours=hours, remain_minutes=minutes,
+        remain_time_third_raw=seconds,
         remain_dist_m=remain_dist_m, speed_kmh=speed_kmh,
         layout="variable2", raw=payload[:end])
 
@@ -182,11 +198,18 @@ def decode_nav_variable2(payload):
 # ---------------------------------------------------------------------------
 # Builder (de test round-trip va de emu ESP32 tham chieu; C port trong emu).
 # ---------------------------------------------------------------------------
+def _build_time(nav):
+    if nav.remain_time_s is None:
+        return nav.remain_hours, nav.remain_minutes, nav.remain_time_third_raw
+    h, rem = divmod(max(0, nav.remain_time_s), 3600)
+    m, s = divmod(rem, 60)
+    return h, m, s
+
+
 def build_nav_variable(nav):
     n = nav.next_road.encode("utf-8")[:255]
     c = nav.current_road.encode("utf-8")[:255]
-    h, rem = divmod(max(0, nav.remain_time_s), 3600)
-    m, s = divmod(rem, 60)
+    h, m, s = _build_time(nav)
     body = struct.pack(">B", nav.direction & 0xFF) + struct.pack(">I", nav.distance_m)
     body += bytes((len(n),)) + n + bytes((len(c),)) + c
     body += struct.pack(">H", h) + bytes((m, s))
@@ -197,8 +220,7 @@ def build_nav_variable(nav):
 def build_nav_fixed(nav):
     n = nav.next_road.encode("utf-8")[:0x50].ljust(0x50, b"\x00")
     c = nav.current_road.encode("utf-8")[:0x50].ljust(0x50, b"\x00")
-    h, rem = divmod(max(0, nav.remain_time_s), 3600)
-    m, s = divmod(rem, 60)
+    h, m, s = _build_time(nav)
     body = struct.pack(">B", nav.direction & 0xFF) + struct.pack(">I", nav.distance_m) + n + c
     body += struct.pack(">H", h) + bytes((m, s))
     body += struct.pack(">I", nav.remain_dist_m) + struct.pack(">H", nav.speed_kmh)
@@ -209,8 +231,7 @@ def build_nav_fixed(nav):
 def build_nav_variable2(nav):
     n = nav.next_road.encode("utf-8")[:255]
     c = nav.current_road.encode("utf-8")[:255]
-    h, rem = divmod(max(0, nav.remain_time_s), 3600)
-    m, s = divmod(rem, 60)
+    h, m, s = _build_time(nav)
     body = struct.pack(">B", nav.direction & 0xFF) + b"\x00\x00\x00\x01\x01"
     body += struct.pack(">I", nav.distance_m)
     body += bytes((len(n),)) + n + bytes((len(c),)) + c
@@ -219,11 +240,23 @@ def build_nav_variable2(nav):
     return body
 
 
-def decode_nav(payload, cmd=None):
+def decode_nav(payload, cmd=None, protocol=None):
     """Tu dong nhan dang layout. cmd (0x00/0x40) neu biet de uu tien.
 
     Uu tien parse "an khop" toan bo payload (end == len); neu khong layout nao
     an khop (vd payload co pad), lay parse dau tien khong loi."""
+    if protocol is not None:
+        if protocol == 'legacy' and cmd in (None, 0):
+            info = decode_nav_fixed(payload)
+        elif protocol == 'new' and cmd == 0:
+            info = decode_nav_variable(payload)
+        elif protocol == 'new' and cmd == 0x40:
+            info = decode_nav_variable2(payload)
+        else:
+            raise ValueError('unsupported protocol/navigation command')
+        if len(info.raw) != len(payload):
+            raise ValueError('unexpected navigation trailing data')
+        return info
     order = []
     if cmd == 0x40:
         order = [decode_nav_variable2, decode_nav_variable, decode_nav_fixed]
