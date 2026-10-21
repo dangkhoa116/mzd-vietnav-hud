@@ -238,11 +238,8 @@ insert_env() {
         { print }' "$_conf" > "$_new" || { rm -f "$_new"; die "awk failed on $_conf"; }
     # what the result must be, minus our lines
     sed "/<service .*name=\"$_svc\"/ s/reset_board=\"yes\"/reset_board=\"no\"/" "$_conf" > /tmp/vietnav.want
-    if [ -n "$_l2" ]; then
-        grep -v -x -F -e "$_l1" -e "$_l2" "$_new" > /tmp/vietnav.got
-    else
-        grep -v -x -F -e "$_l1" "$_new" > /tmp/vietnav.got
-    fi
+    # awk, not grep -x: the car's BusyBox 1.19 grep has no -x
+    awk -v l1="$_l1" -v l2="$_l2" '$0 != l1 && (l2 == "" || $0 != l2)' "$_new" > /tmp/vietnav.got
     _old=$(wc -l < "$_conf"); _cnt=$(wc -l < "$_new")
     _add=1; [ -n "$_l2" ] && _add=2
     if cmp -s /tmp/vietnav.want /tmp/vietnav.got && [ "$_cnt" = "$((_old + _add))" ] \

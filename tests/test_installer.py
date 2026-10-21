@@ -97,6 +97,31 @@ exit ${N:-2}
 '''
 STUB = '#!/bin/sh\necho "%s $*" >> "@T@/stub.log"\n%s\n'
 
+# The car's grep is BusyBox 1.19.2: only these options (no -x, no long
+# options). Anything else prints its usage and fails, as on the car - logged
+# as GREP-BAD so a test can catch it.
+GREP_OPTS = "HhnlLoqvsriwFEcmABCef"
+GREP_STUB = r'''#!/bin/sh
+skip=
+for a in "$@"; do
+    if [ -n "$skip" ]; then skip=; continue; fi
+    case "$a" in
+        --) break ;;
+        --*) echo "GREP-BAD grep $*" >> "@T@/stub.log"; echo "grep: unrecognized option '$a'" >&2; exit 2 ;;
+        -?*) o=${a#-}
+             while [ -n "$o" ]; do
+                 c=${o%"${o#?}"}; o=${o#?}
+                 case "@OPTS@" in *"$c"*) ;; *)
+                     echo "GREP-BAD grep $*" >> "@T@/stub.log"
+                     echo "grep: invalid option -- '$c'" >&2; exit 2 ;; esac
+                 case "$c" in [mABCef]) [ -z "$o" ] && skip=1; break ;; esac
+             done ;;
+        *) break ;;
+    esac
+done
+exec @GREP@ "$@"
+'''
+
 
 def rewrite(text, t):
     for a in ("/jci/", "/etc/", "/usr/", "/data_persist", "/tmp/", "/sys/class/gpio"):
@@ -172,6 +197,10 @@ class Car:
                   'if [ "${n:-0}" -gt 0 ]; then echo "  300 root  /jci/tools/jci-dialog --info";'
                   ' echo $((n - 1)) > "@T@/dialog-open"; fi\n'
                   'echo "  120 root  /jci/sm/sm -f /jci/sm/sm_WCP.conf"')
+        real = BUSYBOX + " grep" if BUSYBOX else shutil.which("grep")
+        self.write("bin/grep", GREP_STUB.replace("@T@", self.t).replace("@OPTS@", GREP_OPTS)
+                   .replace("@GREP@", real).encode())
+        os.chmod(os.path.join(self.t, "bin/grep"), 0o755)
         self.write("jci/tools/jci-dialog", DIALOG_STUB.replace("@T@", self.t).encode())
         os.chmod(os.path.join(self.t, "jci/tools/jci-dialog"), 0o755)
 
@@ -218,6 +247,7 @@ class Car:
     def stublog(self):
         log = (self.read("stub.log") or b"").decode()
         BAD_DIALOGS.update(l for l in log.splitlines() if l.startswith("DIALOG-BAD"))
+        BAD_GREPS.update(l for l in log.splitlines() if l.startswith("GREP-BAD"))
         return log
 
     def conf(self, name):
@@ -250,6 +280,7 @@ def _cleanup():
         for d in SCRATCH:
             shutil.rmtree(d, ignore_errors=True)
 BAD_DIALOGS = set()
+BAD_GREPS = set()
 
 
 def check(name, ok, info=""):
@@ -838,6 +869,8 @@ def main():
     build_kit_tests()
     check("jci-dialog: every call is one the car's binary shows in full",
           not BAD_DIALOGS, "\n".join(sorted(BAD_DIALOGS)))
+    check("grep: every call is one the car's BusyBox 1.19 grep takes",
+          not BAD_GREPS, "\n".join(sorted(BAD_GREPS)))
     print("FAILED %d: %s" % (len(FAILED), ", ".join(FAILED)) if FAILED else "all tests passed")
     return 1 if FAILED else 0
 

@@ -96,6 +96,12 @@ ours_in() {
         END { print n + 0 }' "$1"
 }
 
+# has_line <file> <line>: the file has that exact line (the car's BusyBox 1.19
+# grep has no -x)
+has_line() {
+    [ -f "$1" ] && awk -v l="$2" '$0 == l { f = 1 } END { exit !f }' "$1"
+}
+
 # --- strip_env <conf> <service> <line1> [line2] ------------------------------------
 # Removes our exact lines from that service's block in the conf - wherever
 # they sit in it - and, for sm.conf, puts back a reset_board the install
@@ -105,7 +111,7 @@ strip_env() {
     _conf=$1; _svc=$2; _l1=$3; _l2=${4:-}
     [ -f "$_conf" ] || return 0
     _rb=no
-    if [ "$_conf" = "$SM" ] && grep -qx "$(basename "$_conf") $_svc" "$STATE/reset_board" 2>/dev/null; then
+    if [ "$_conf" = "$SM" ] && has_line "$STATE/reset_board" "$(basename "$_conf") $_svc"; then
         _rb=yes
     fi
     _new="$_conf.vietnav-new"
@@ -134,7 +140,7 @@ strip_env() {
         sync
         log "$(basename "$_conf"): $_svc -$_n line(s) ($_old->$_cnt)$([ $_rb = yes ] && echo ', reset_board back to yes')"
         if [ "$_rb" = yes ]; then
-            grep -vx "$(basename "$_conf") $_svc" "$STATE/reset_board" > "$STATE/reset_board.new"
+            awk -v l="$(basename "$_conf") $_svc" '$0 != l' "$STATE/reset_board" > "$STATE/reset_board.new"
             mv -f "$STATE/reset_board.new" "$STATE/reset_board"
         fi
     else
