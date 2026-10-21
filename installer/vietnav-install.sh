@@ -22,7 +22,11 @@
 #   - every check runs BEFORE anything is written: a payload file whose md5
 #     is not the one in vietnav-payload/PAYLOAD-SOURCES.md, or a service
 #     block that already carries an environ_var from another mod, stops the
-#     whole install with nothing changed;
+#     whole install with nothing changed (exit 4) - with one exception: the
+#     same CarPlay bridge put in by another installer
+#     (/data_persist/oem-carplay, see OLDCP_L1) is replaced by ours when its
+#     two lines are the whole environ_var set, right under the <service>
+#     line; the rollback puts that line back, so the old install runs again;
 #   - the unit's binaries the shims hook into (blmjciaapa.so, aap_service,
 #     blmjcicarplay.so, libdevmgr_interface.so) must be the builds the mods
 #     were checked on (74.00.324A = 74.00.331, by md5); any other build
@@ -64,7 +68,7 @@ LOG=/tmp/vietnav-install.log
 TAG="[vietnav]"
 # The kit version (x.y.z): the same as VERSION in the repo - build-kit.py
 # refuses a kit where they differ. The touch menu reads it from here.
-VIETNAV_VERSION="0.9.0"
+VIETNAV_VERSION="0.9.1"
 WDOG="/sys/class/gpio/Watchdog Disable/value"
 SM=/jci/sm/sm.conf
 SMW=/jci/sm/sm_WCP.conf
@@ -77,6 +81,9 @@ AA_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/o
 AA_L2='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-aap_service.so"/>'
 CP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>'
 CP_L2='            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
+# The same bridge from another installer: its LD_PRELOAD line, followed by
+# our CP_L2 (seen on a 74.00.324A car, Oct 2026).
+OLDCP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-carplay/libpatch-blmjcicarplay.so"/>'
 
 # The unit's own binaries the shims hook into. The shims patch fixed places
 # in them (the aap_service shim calls addresses inside aap_service; the
@@ -185,6 +192,7 @@ host_check() {
     done
 }
 unsupported() { log "ERROR: $* - nothing changed (checked: 74.00.324A / 74.00.331)"; exit 3; }
+conflict() { log "ERROR: $* - nothing changed. Remove that mod first (or install by hand)."; exit 4; }
 want() { [ "$TARGET" = "all" ] || [ "$TARGET" = "$1" ]; }
 
 : > "$LOG" 2>/dev/null || LOG=/dev/null
@@ -260,6 +268,53 @@ insert_env() {
     fi
 }
 
+# --- the same CarPlay bridge from another installer -------------------------------
+# oldcp_state <conf> -> "old" when the jciCARPLAY block's environ_vars are
+# exactly OLDCP_L1 then CP_L2, right under the <service> line; else "no".
+oldcp_state() {
+    awk -v svc='name="jciCARPLAY"' -v o1="$OLDCP_L1" -v l2="$CP_L2" '
+        !on && /<service[ \t]/ && index($0, svc) {
+            n++; on = ($0 !~ /\/>[ \t]*$/); i = 0; next
+        }
+        on && /<\/service>/ { on = 0 }
+        on { i++
+             if (/<environ_var/) { e++; if ((i == 1 && $0 == o1) || (i == 2 && $0 == l2)) ok++ } }
+        END { print (n == 1 && e == 2 && ok == 2) ? "old" : "no" }' "$1"
+}
+# swap_env <conf>: OLDCP_L1 -> CP_L1 in the jciCARPLAY block, reset_board
+# yes->no (recorded for sm.conf), and a record for the rollback. Proves the
+# result is the original with exactly that, then renames it into place.
+swap_env() {
+    _conf=$1; _svc=jciCARPLAY
+    _new="$_conf.vietnav-new"
+    _bak="/data_persist/$(basename "$_conf").bak_vietnav"
+    [ -f "$_bak" ] || { cp -a "$_conf" "$_bak" || die "backup of $_conf failed"; log "backup -> $_bak"; }
+    _rb=no
+    grep "<service .*name=\"$_svc\"" "$_conf" | grep -q 'reset_board="yes"' && _rb=yes
+    awk -v svc="name=\"$_svc\"" -v o1="$OLDCP_L1" -v l1="$CP_L1" '
+        /<service[ \t]/ && index($0, svc) { sub(/reset_board="yes"/, "reset_board=\"no\""); print; nx = 1; next }
+        nx && $0 == o1 { print l1; nx = 0; next }
+        { nx = 0; print }' "$_conf" > "$_new" || { rm -f "$_new"; die "awk failed on $_conf"; }
+    # back from ours to the old line must give the original (+ reset_board)
+    sed "/<service .*name=\"$_svc\"/ s/reset_board=\"yes\"/reset_board=\"no\"/" "$_conf" > /tmp/vietnav.want
+    awk -v o1="$OLDCP_L1" -v l1="$CP_L1" '$0 == l1 { print o1; next } { print }' "$_new" > /tmp/vietnav.got
+    _old=$(wc -l < "$_conf"); _cnt=$(wc -l < "$_new")
+    if cmp -s /tmp/vietnav.want /tmp/vietnav.got && [ "$_cnt" = "$_old" ] \
+            && [ "$(svc_state "$_new" "$_svc" "$CP_L1" "$CP_L2")" = ours ]; then
+        rm -f /tmp/vietnav.want /tmp/vietnav.got
+        mv -f "$_new" "$_conf" || { rm -f "$_new"; die "could not replace $_conf"; }
+        sync
+        echo "$(basename "$_conf") $_svc" >> "$STATE/takeover"
+        log "$(basename "$_conf"): $_svc oem-carplay -> cp-hud-mod (the old line comes back on rollback), reset_board was $_rb"
+        if [ "$_rb" = yes ] && [ "$_conf" = "$SM" ]; then
+            echo "$(basename "$_conf") $_svc" >> "$STATE/reset_board"
+        fi
+    else
+        rm -f "$_new" /tmp/vietnav.want /tmp/vietnav.got
+        die "$(basename "$_conf"): sanity check failed replacing the old $_svc lines ($_old->$_cnt), left untouched"
+    fi
+}
+
 # put <src> <dst>: copy next to the target, then rename into place
 put() {
     cp "$1" "$2.vietnav-new" && mv -f "$2.vietnav-new" "$2" || { rm -f "$2.vietnav-new"; die "copy failed: $2"; }
@@ -267,6 +322,7 @@ put() {
 
 # ============================ checks (nothing is written here) ===================
 PLAN=""          # "conf|service|line1|line2" per insertion still to do
+SWAP=""          # sm configs whose jciCARPLAY has the old bridge's lines
 plan_svc() { # plan_svc <conf> <service> <l1> [l2]
     _st=$(svc_state "$1" "$2" "$3" "${4:-}")
     case "$_st" in
@@ -274,7 +330,13 @@ plan_svc() { # plan_svc <conf> <service> <l1> [l2]
 $1|$2|$3|${4:-}"; log "  $(basename "$1"): $2 -> add" ;;
         ours)   log "  $(basename "$1"): $2 -> already in place" ;;
         absent) die "$(basename "$1") has no $2 service - unexpected firmware, nothing changed" ;;
-        foreign) die "$(basename "$1"): $2 already has an environ_var from another mod - nothing changed. Remove that mod first (or install by hand)." ;;
+        foreign)
+            if [ "$2" = jciCARPLAY ] && [ "$(oldcp_state "$1")" = old ]; then
+                SWAP="$SWAP $1"
+                log "  $(basename "$1"): $2 -> replace the same bridge from another installer (/data_persist/oem-carplay)"
+            else
+                conflict "$(basename "$1"): $2 already has an environ_var from another mod"
+            fi ;;
         *)      die "$(basename "$1"): $2 block is $_st - nothing changed" ;;
     esac
 }
@@ -332,7 +394,7 @@ RW=1
 rm -rf "$TXN"; mkdir -p "$TXN" || die "cannot create $TXN - nothing changed"
 : > "$TXN/list"
 for c in $CONFS; do snap "$c"; done
-snap "$STATE/reset_board" "$STATE/navisupported" "$STATE/version"
+snap "$STATE/reset_board" "$STATE/navisupported" "$STATE/version" "$STATE/takeover"
 if want aa; then
     for XML in aap_system_attributes.xml aap_system_attributes_UCP.xml; do
         snap "/etc/$XML" "/etc/$XML.orig"
@@ -377,6 +439,7 @@ for p in $PLAN; do
 done
 IFS=$OLDIFS
 set +f
+for c in $SWAP; do swap_env "$c"; done
 
 if want aa; then
     for XML in aap_system_attributes.xml aap_system_attributes_UCP.xml; do

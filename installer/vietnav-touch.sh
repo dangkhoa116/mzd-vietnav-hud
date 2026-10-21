@@ -29,6 +29,8 @@ HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || HERE=$(dirname "$0")
 DIALOG=/jci/tools/jci-dialog
 AA_TOK=data_persist/oem-aa-mod/libpatch
 CP_TOK=data_persist/cp-hud-mod/libpatch
+# the same CarPlay bridge from another installer: CAI DAT replaces it
+OLDCP_TOK=data_persist/oem-carplay/libpatch
 # The version in a vietnav-install.sh (VIETNAV_VERSION="x.y.z"), empty if none.
 ver() { sed -n 's/^VIETNAV_VERSION="\([0-9.]*\)".*/\1/p' "$1" 2>/dev/null | head -n 1; }
 KV=$(ver "$HERE/vietnav-install.sh")
@@ -77,6 +79,10 @@ cp_installed() {
     grep -q "$CP_TOK" /jci/sm/sm.conf 2>/dev/null \
         || grep -q "$CP_TOK" /jci/sm/sm_WCP.conf 2>/dev/null
 }
+oldcp_installed() {
+    grep -q "$OLDCP_TOK" /jci/sm/sm.conf 2>/dev/null \
+        || grep -q "$OLDCP_TOK" /jci/sm/sm_WCP.conf 2>/dev/null
+}
 have_aa() { [ -f "$HERE/vietnav-payload/libpatch-blmjciaapa.so" ] && [ -f "$HERE/vietnav-payload/aap_system_attributes.xml" ]; }
 have_cp() { [ -f "$HERE/vietnav-payload/libpatch-blmjcicarplay.so" ]; }
 
@@ -110,6 +116,12 @@ case "$INST" in
     cp)      ST="DA CAI CARPLAY / installed${IV:+ $IV}" ;;
     *)       ST="CHUA CAI / not installed" ;;
 esac
+OLDCP=0
+if [ -z "$INST" ] && oldcp_installed; then
+    OLDCP=1
+    ST="CHUA CAI, CO CARPLAY HUD CU / old CP HUD"
+    log "old CarPlay bridge (/data_persist/oem-carplay) in the sm configs"
+fi
 if [ -n "$INST" ]; then
     OK="GO BO"; DO="GO BO = remove"
 else
@@ -156,14 +168,20 @@ if [ -z "$INST" ]; then
         exit 0
     fi
     # nothing is changed before this second tap
-    ask2 "$TITLE" "CAI DAT `tname $T`?\nInstall `tname $T`?\n\nHUY = cancel" "CAI DAT" "HUY"
+    NOTE=""
+    [ "$OLDCP" = 1 ] && [ "$T" != aa ] && NOTE="Thay CARPLAY HUD cu / replaces the old one"
+    ask2 "$TITLE" "CAI DAT `tname $T`?\nInstall `tname $T`?\n$NOTE\nHUY = cancel" "CAI DAT" "HUY"
     [ "$?" = 0 ] || { log "install not confirmed"; exit 0; }
     log "install: $T"
     popup "Dang cai dat `tname $T`... Dung rut USB.\nInstalling `tname $T`... do not remove the USB."
-    if sh "$HERE/vietnav-install.sh" "$T" --yes; then
+    sh "$HERE/vietnav-install.sh" "$T" --yes
+    rc=$?
+    if [ "$rc" = 0 ]; then
         say "DA CAI / INSTALLED: `tname $T`\nTat may, doi 10 phut, roi mo dan duong.\nPower-cycle the car, then start navigation.\nLog: vietnav-install.log\n$CREDIT"
-    elif [ "$?" = 3 ]; then
+    elif [ "$rc" = 3 ]; then
         say "KHONG HO TRO / NOT SUPPORTED\nPhan mem xe nay chua duoc kiem tra.\nThis unit's software was not tested.\nKhong thay doi gi / nothing changed.\nLog: vietnav-install.log"
+    elif [ "$rc" = 4 ]; then
+        say "XE DA CO MOD KHAC / ANOTHER MOD IS IN\nMot mod khac dang dung cho nay.\nAnother mod uses the same service.\nKhong thay doi gi / nothing changed.\nBam THU THAP, mang USB ve / collect logs"
     else
         say "CAI DAT LOI / INSTALL FAILED\n\nMang USB ve, xem / bring the USB home, see:\nvietnav-install.log"
     fi

@@ -71,6 +71,8 @@ AA_L1 = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist
 AA_L2 = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-aap_service.so"/>'
 CP_L1 = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>'
 CP_L2 = '            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
+# the same CarPlay bridge put in by another installer (a 74.00.324A car)
+OLDCP_L1 = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-carplay/libpatch-blmjcicarplay.so"/>'
 FOREIGN = '            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/other-mod/libother.so"/>'
 
 # Behaves like the car's /jci/tools/jci-dialog where it matters: only its
@@ -561,12 +563,95 @@ def install_tests():
     if real:
         sm0 = open(os.path.join(real, "sm.conf"), "rb").read()
         smw0 = open(os.path.join(real, "sm_WCP.conf"), "rb").read()
-        c = Car(sm=sm0, smw=smw0)
+        c = Car()
+        # car paths in the confs (another mod's lines) rewritten as the scripts are
+        here = lambda b: rewrite(b.decode(), c.t).encode()
+        sm0, smw0 = here(sm0), here(smw0)
+        c.write("jci/sm/sm.conf", sm0)
+        c.write("jci/sm/sm_WCP.conf", smw0)
         rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
         check("real confs: install", rc == 0 and under(c.conf("sm.conf"), "jciCARPLAY",
                                                        [car_line(CP_L1, c.t), car_line(CP_L2, c.t)]), out)
         rc, out = c.run("usb/vietnav-rollback.sh", "all")
         check("real confs: sm.conf back byte for byte", rc == 0 and c.read("jci/sm/sm.conf") == sm0, out)
+        # sm_WCP.conf's reset_board is the CarPlay kit's and stays "no"
+        def rb_no(conf):
+            return "\n".join(re.sub(r'reset_board="yes"', 'reset_board="no"', r)
+                             if "<service " in r and re.search(r'name="(jciAAPA|aap_service|jciCARPLAY)"', r)
+                             else r for r in conf.split("\n"))
+        check("real confs: sm_WCP.conf back, but for its reset_board",
+              c.conf("sm_WCP.conf") == rb_no(smw0.decode()), out)
+
+
+def oldcp_tests():
+    """A car that already runs the same CarPlay bridge from another installer
+    (/data_persist/oem-carplay): CAI DAT replaces it, GO BO puts it back."""
+    def old_car(extra_first=None, extra_last=None):
+        c = Car(wcp_conf=True)
+        for name in ("sm.conf", "sm_WCP.conf"):
+            rows = c.conf(name).split("\n")
+            i = next(k for k, r in enumerate(rows) if 'name="jciCARPLAY"' in r)
+            add = [car_line(OLDCP_L1, c.t), car_line(CP_L2, c.t)]
+            if extra_first: add.insert(0, extra_first)
+            if extra_last: add.append(extra_last)
+            rows[i + 1:i + 1] = add
+            c.write("jci/sm/" + name, "\n".join(rows).encode())
+        return c
+
+    c = old_car()
+    L = lambda x: car_line(x, c.t)
+    sm0, smw0 = c.read("jci/sm/sm.conf"), c.read("jci/sm/sm_WCP.conf")
+    rc, out = c.run("usb/vietnav-install.sh", "cp")
+    check("old bridge: the dry run says it will replace it",
+          rc == 0 and out.count("replace the same bridge from another installer") == 2, out)
+    rc, out = c.run("usb/vietnav-install.sh", "cp", "--yes")
+    sm, smw = c.conf("sm.conf"), c.conf("sm_WCP.conf")
+    check("old bridge: install cp succeeds", rc == 0 and "DONE (cp)" in out, out)
+    check("old bridge: ours in both confs, the old line gone",
+          all(under(x, "jciCARPLAY", [L(CP_L1), L(CP_L2)]) and "oem-carplay" not in x for x in (sm, smw)), sm + smw)
+    check("old bridge: only that line changed (+ reset_board in sm.conf)",
+          sm.count("\n") == sm0.decode().count("\n") and smw.count("\n") == smw0.decode().count("\n")
+          and 'reset_board="no"' in svc_line(sm, "jciCARPLAY"), sm)
+    check("old bridge: the takeover is recorded",
+          sorted((c.read("data_persist/vietnav/takeover") or b"").decode().split()) ==
+          sorted("sm.conf jciCARPLAY sm_WCP.conf jciCARPLAY".split()))
+    rc, out = c.run("usb/vietnav-install.sh", "cp", "--yes")
+    check("old bridge: installing again changes nothing",
+          rc == 0 and c.conf("sm.conf") == sm and c.conf("sm_WCP.conf") == smw, out)
+    rc, out = c.run("usb/vietnav-rollback.sh", "cp")
+    check("old bridge: GO BO puts the old bridge back, byte for byte",
+          rc == 0 and c.read("jci/sm/sm.conf") == sm0 and c.read("jci/sm/sm_WCP.conf") == smw0, out)
+    check("old bridge: ...and forgets the takeover", c.read("data_persist/vietnav/takeover") is None)
+
+    c = old_car()
+    sm0, smw0 = c.read("jci/sm/sm.conf"), c.read("jci/sm/sm_WCP.conf")
+    rc, out = c.run("usb/vietnav-install.sh", "all", "--yes")
+    rc2, out2 = c.run("usb/vietnav-rollback.sh", "all")
+    check("old bridge: install all + rollback all is exact",
+          rc == 0 and rc2 == 0 and c.read("jci/sm/sm.conf") == sm0 and c.read("jci/sm/sm_WCP.conf") == smw0, out + out2)
+
+    for what, kw in (("a third line in the block", {"extra_last": FOREIGN}),
+                     ("the old lines not right under <service>", {"extra_first": FOREIGN})):
+        c = old_car(**kw)
+        before = c.tree()
+        rc, out = c.run("usb/vietnav-install.sh", "cp", "--yes")
+        check("old bridge: %s -> exit 4, nothing changed" % what, rc == 4 and c.tree() == before, out)
+
+    # the touch menu says so, and says what CAI DAT will do
+    c = old_car()
+    c.seq(0, 1, 0, 0)                 # CAI DAT, CARPLAY, CAI DAT, OK
+    c.run("usb/vietnav-touch.sh")
+    time.sleep(0.3)
+    log = c.stublog()
+    check("old bridge: touch shows it, CAI DAT replaces it",
+          "CHUA CAI, CO CARPLAY HUD CU / old CP HUD" in log and "Thay CARPLAY HUD cu / replaces the old one" in log
+          and "DA CAI / INSTALLED: CARPLAY" in log and under(c.conf("sm.conf"), "jciCARPLAY", [car_line(CP_L1, c.t), car_line(CP_L2, c.t)]), log)
+    c = old_car(extra_last=FOREIGN)
+    c.seq(0, 1, 0, 0)
+    c.run("usb/vietnav-touch.sh")
+    time.sleep(0.3)
+    check("old bridge: another mod in the way -> XE DA CO MOD KHAC",
+          "XE DA CO MOD KHAC / ANOTHER MOD IS IN" in c.stublog() and "CAI DAT LOI" not in c.stublog(), c.stublog())
 
 
 def launcher_tests():
@@ -894,6 +979,7 @@ def host_tests():
 def main():
     print("shell:", " ".join(SH))
     install_tests()
+    oldcp_tests()
     host_tests()
     launcher_tests()
     touch_tests()

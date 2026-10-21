@@ -146,9 +146,17 @@ nhau, không kit nào làm hỏng phần của kit khác.
   chốt chống boot-loop của kit CarPlay, để nguyên.
 - **Mod khác trong cùng service.** Nếu `jciAAPA`, `aap_service` hoặc
   `jciCARPLAY` đã có `environ_var` của mod khác, installer dừng trước khi ghi bất
-  cứ gì. Xử lý mod kia trước. Mod nào chèn dòng vào cùng service *sau* khi đã
-  cài kit này thì không chặn được việc gỡ: dòng của kit này được gỡ dù nằm ở
-  đâu trong block, dòng của mod kia giữ nguyên.
+  cứ gì (exit 4; menu cảm ứng báo XE DA CO MOD KHAC / ANOTHER MOD IS IN). Xử lý
+  mod kia trước. Mod nào chèn dòng vào cùng service *sau* khi đã cài kit này
+  thì không chặn được việc gỡ: dòng của kit này được gỡ dù nằm ở đâu trong
+  block, dòng của mod kia giữ nguyên.
+- **Cùng bộ CarPlay bridge do bộ cài khác cài.** Có xe đã chạy bridge này từ
+  `/data_persist/oem-carplay` (dòng `LD_PRELOAD` của nó, tiếp theo là đúng dòng
+  `LD_LIBRARY_PATH` như của kit này). Nếu hai dòng đó là toàn bộ `environ_var`,
+  nằm ngay dưới dòng `<service>`, bộ cài đổi `LD_PRELOAD` sang bản của kit này
+  và ghi lại vào `/data_persist/vietnav/takeover`; trước khi cài, menu báo
+  CHUA CAI, CO CARPLAY HUD CU. Gỡ cài thì trả lại dòng cũ, bản cũ chạy lại như
+  trước. Thư mục `/data_persist/oem-carplay` không bị đụng tới.
 - **Không cài dở.** File payload hỏng (sai md5) thì dừng trước khi ghi. Nếu
   đang ghi mà lỗi giữa chừng, mọi thứ lần chạy đó đã đổi (sm config, `/etc`,
   bản ghi của kit) được trả lại từ bản sao chụp ngay trước đó. Mỗi lúc chỉ
@@ -169,7 +177,7 @@ nhau, không kit nào làm hỏng phần của kit khác.
 - [x] Bộ cài chạm cho firmware VN (74.00.331): AA mod + CarPlay bridge cùng một
       dia TouchTune, có gỡ cài và chế độ thu thập chẩn đoán; launcher dùng
       chung sống cùng kit TPMS và kit CarPlay không dây
-- [x] Kiểm tra trên máy: 104 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
+- [x] Kiểm tra trên máy: 120 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
       chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
       gì binary jci-dialog của xe thật sự hiển thị được
 - [ ] Buổi chạy xe: AA, rồi CarPlay (chỉ THU THAP khi có lỗi) — xác nhận trên

@@ -50,6 +50,13 @@ ps 2>/dev/null | grep -E "aap|AAPA|blmj|jcinavi|jciCARPLAY|sm -f" | grep -v grep
     if grep -q "tpms-boot" /jci/scripts/stage_wifi.sh 2>/dev/null; then echo "TPMS boot hook: installed"; else echo "TPMS boot hook: no"; fi
 } > "$STAGE/other-kits.txt"
 mount | grep -E "/mnt/sd|data_persist" > "$STAGE/mounts.txt"
+# every mod's preload in the sm configs, and what those folders hold (md5),
+# so another installer's copy of a bridge can be told apart from ours
+grep -h -o 'env_value="[^"]*"' /jci/sm/sm.conf /jci/sm/sm_WCP.conf 2>/dev/null | sort | uniq -c > "$STAGE/environ-vars.txt"
+for d in /data_persist/*/; do
+    ls "$d"*.so >/dev/null 2>&1 || continue
+    echo "== $d"; ls -la "$d"; md5sum "$d"*.so
+done > "$STAGE/mod-folders.txt" 2>&1
 # is each shim running, and in which process
 for _m in /proc/[0-9]*/maps; do
     grep -q 'libpatch-' "$_m" 2>/dev/null || continue

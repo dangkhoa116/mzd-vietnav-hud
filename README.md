@@ -155,10 +155,19 @@ undoes another's.
   the CarPlay kit's boot-loop guard and is left as it is.
 - **Another mod in the same service.** If `jciAAPA`, `aap_service` or
   `jciCARPLAY` already has an `environ_var` from a mod other than this one, the
-  install stops before writing anything. Sort the other mod out first. A mod
+  install stops before writing anything (exit 4; the touch menu says
+  XE DA CO MOD KHAC / ANOTHER MOD IS IN). Sort the other mod out first. A mod
   that adds its line to the same service *after* this install does not stop
   the rollback: our lines are taken out wherever they sit in the block, theirs
   stay.
+- **The same CarPlay bridge from another installer.** Some cars already run
+  this bridge from `/data_persist/oem-carplay` (its `LD_PRELOAD` line followed
+  by the same `LD_LIBRARY_PATH` line). When those two lines are the whole
+  `environ_var` set, right under the `<service>` line, the install points the
+  `LD_PRELOAD` at our build instead and records it in
+  `/data_persist/vietnav/takeover`; the menu shows
+  CHUA CAI, CO CARPLAY HUD CU before. The rollback puts the old line back, so
+  the old install runs again. `/data_persist/oem-carplay` is never touched.
 - **No half install.** A damaged payload file (md5) stops the install before
   any write. A write that fails half-way puts back everything that run changed
   (sm configs, `/etc`, its own records) from copies taken just before. One
@@ -179,7 +188,7 @@ undoes another's.
 - [x] Touch install kit for VN firmware (74.00.331): AA mod + CarPlay bridge on
       one TouchTune stick, with rollback and a diagnostics collect mode; the
       shared launcher coexists with the TPMS and wireless-CarPlay kits
-- [x] Host checks: 104 checks against a fake CMU, including the install/rollback
+- [x] Host checks: 120 checks against a fake CMU, including the install/rollback
       round trip on the car's own sm configs and every dialog checked against
       what the car's jci-dialog binary really shows
 - [ ] On-car session: AA, then CarPlay (THU THAP only if one fails) — confirm

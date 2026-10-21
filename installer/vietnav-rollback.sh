@@ -5,7 +5,10 @@
 #   aa  removes our jciAAPA/aap_service lines from sm.conf and sm_WCP.conf
 #       and restores the /etc AAP attribute XMLs from their .orig backups
 #   cp  removes our jciCARPLAY lines (LD_PRELOAD + LD_LIBRARY_PATH) and puts
-#       NaviSupported back to FALSE - only if the install changed it
+#       NaviSupported back to FALSE - only if the install changed it. Where
+#       the install replaced the same bridge from another installer
+#       (/data_persist/oem-carplay, recorded in /data_persist/vietnav/takeover)
+#       its LD_PRELOAD line goes back instead, so that install runs again
 #
 # Only our own lines go: they are matched whole, wherever they sit inside
 # that service's block (another mod may have put its own line above them
@@ -45,6 +48,8 @@ AA_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/o
 AA_L2='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-aa-mod/libpatch-aap_service.so"/>'
 CP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/cp-hud-mod/libpatch-blmjcicarplay.so"/>'
 CP_L2='            <environ_var env_name="LD_LIBRARY_PATH" env_value="/jci/lib:/usr/lib"/>'
+# the same bridge from another installer, which the install may have replaced
+OLDCP_L1='            <environ_var env_name="LD_PRELOAD" env_value="/data_persist/oem-carplay/libpatch-blmjcicarplay.so"/>'
 
 LOCK=/tmp/vietnav.lock
 WD=0; RW=0; LOCKED=0
@@ -100,6 +105,44 @@ ours_in() {
 # grep has no -x)
 has_line() {
     [ -f "$1" ] && awk -v l="$2" '$0 == l { f = 1 } END { exit !f }' "$1"
+}
+
+# --- unswap_env <conf>: CP_L1 -> OLDCP_L1, where the install replaced it -----------
+# Commits only when the result is the current file with exactly that line
+# (and a recorded reset_board) changed back, and none of ours is left.
+unswap_env() {
+    _conf=$1; _svc=jciCARPLAY
+    _rb=no
+    if [ "$_conf" = "$SM" ] && has_line "$STATE/reset_board" "$(basename "$_conf") $_svc"; then
+        _rb=yes
+    fi
+    _new="$_conf.vietnav-new"
+    awk -v svc="name=\"$_svc\"" -v o1="$OLDCP_L1" -v l1="$CP_L1" -v rb="$_rb" '
+        /<service[ \t]/ && index($0, svc) {
+            if (rb == "yes") sub(/reset_board="no"/, "reset_board=\"yes\"")
+            print; nx = 1; next
+        }
+        nx && $0 == l1 { print o1; nx = 0; n++; next }
+        { nx = 0; print }
+        END { print n + 0 > "/tmp/vietnav.removed" }' "$_conf" > "$_new" \
+        || { rm -f "$_new"; die "awk failed on $_conf"; }
+    _n=$(cat /tmp/vietnav.removed 2>/dev/null); _n=${_n:-0}
+    rm -f /tmp/vietnav.removed
+    _old=$(wc -l < "$_conf"); _cnt=$(wc -l < "$_new")
+    if [ "$_n" = 1 ] && [ "$_cnt" = "$_old" ] && [ "$(ours_in "$_new" "$_svc" "$CP_L1")" = 0 ]; then
+        mv -f "$_new" "$_conf" || { rm -f "$_new"; die "could not replace $_conf"; }
+        sync
+        log "$(basename "$_conf"): $_svc back to /data_persist/oem-carplay (the install had replaced it)$([ $_rb = yes ] && echo ', reset_board back to yes')"
+        awk -v l="$(basename "$_conf") $_svc" '$0 != l' "$STATE/takeover" > "$STATE/takeover.new"
+        mv -f "$STATE/takeover.new" "$STATE/takeover"
+        if [ "$_rb" = yes ]; then
+            awk -v l="$(basename "$_conf") $_svc" '$0 != l' "$STATE/reset_board" > "$STATE/reset_board.new"
+            mv -f "$STATE/reset_board.new" "$STATE/reset_board"
+        fi
+    else
+        rm -f "$_new"
+        die "$(basename "$_conf"): could not put the old $_svc line back (found $_n of ours under the service line), left untouched (backup: /data_persist/$(basename "$_conf").bak_vietnav)"
+    fi
 }
 
 # --- strip_env <conf> <service> <line1> [line2] ------------------------------------
@@ -177,7 +220,11 @@ fi
 if want cp; then
     log "--- rollback CarPlay bridge ---"
     for CONF in "$SM" "$SMW"; do
-        strip_env "$CONF" jciCARPLAY "$CP_L1" "$CP_L2"
+        if [ -f "$CONF" ] && has_line "$STATE/takeover" "$(basename "$CONF") jciCARPLAY"; then
+            unswap_env "$CONF"
+        else
+            strip_env "$CONF" jciCARPLAY "$CP_L1" "$CP_L2"
+        fi
     done
     NS=$(cat "$STATE/navisupported" 2>/dev/null)
     if [ "$NS" = FALSE ] && [ -f "$MASTER" ] \
@@ -200,6 +247,7 @@ fi
 if ! grep -q -e "data_persist/oem-aa-mod/libpatch" -e "data_persist/cp-hud-mod/libpatch" "$SM" "$SMW" 2>/dev/null; then
     rm -f "$STATE/version"
 fi
+[ -s "$STATE/takeover" ] || rm -f "$STATE/takeover"
 
 log "DONE ($TARGET). /data_persist payload folders were left in place (inert); delete by hand if wanted."
 exit 0
