@@ -37,13 +37,21 @@ String g_protocol = "1.6";           // thu "2.0" neu app can dinh dang moi
 String g_sid      = "VMEMU0000001";  // serial; nhanh B: dung serial HUD that cua minh
 
 // ---------------- GATT ----------------
-#define SVC_UUID  "FFF0"
-#define CHR_FFF1  "FFF1"   // notify (app subscribe; dap getHUDInfo o day)
-#define CHR_FFF2  "FFF2"   // write (duong chinh)
-#define CHR_FFF3  "FFF3"   // write (nhanh khac)
-#define CHR_FFF4  "FFF4"   // notify (TPMS)
+// HAI ho thiet bi HUD (tu APK Android, Ma/i.java va Ma/j.java):
+//   H1/DJBT: service FFF0 - FFF2 write, FFF1 notify, FFF3 write, FFF4 notify(TPMS)
+//   H50    : service FFFF - 9ABC write (byte pipe), 1234 notify
+// Emulator expose CA HAI de khong phu thuoc che do app dang chon.
+#define SVC_H1   "FFF0"
+#define CHR_FFF1 "FFF1"   // notify (H1: dap getHUDInfo o day)
+#define CHR_FFF2 "FFF2"   // write (H1 duong chinh)
+#define CHR_FFF3 "FFF3"   // write (H1 nhanh khac)
+#define CHR_FFF4 "FFF4"   // notify (H1 TPMS)
+#define SVC_H50  "FFFF"
+#define CHR_9ABC "9ABC"   // write (H50 byte pipe)
+#define CHR_1234 "1234"   // notify (H50 dap o day)
 
-NimBLECharacteristic *g_chFFF1;
+NimBLECharacteristic *g_chFFF1;   // notify H1
+NimBLECharacteristic *g_ch1234;   // notify H50
 bool g_connected = false;
 
 // ---------------- khung A5 5A 37 C3 ----------------
@@ -82,11 +90,12 @@ size_t build_frame(uint8_t cmd, const uint8_t *payload, size_t plen, uint8_t *ou
 }
 
 void notify_frame(uint8_t cmd, const uint8_t *payload, size_t plen) {
-  if (!g_connected || !g_chFFF1) return;
+  if (!g_connected) return;
   static uint8_t fr[512];
   size_t n = build_frame(cmd, payload, plen, fr);
   if (n > 512) { Serial.println("[EMU] frame qua dai, bo qua"); return; }
-  g_chFFF1->notify(fr, n);
+  if (g_chFFF1) g_chFFF1->notify(fr, n);
+  if (g_ch1234) g_ch1234->notify(fr, n);
   Serial.printf("[EMU] notify CMD 0x%02X (%d byte payload): %s\n",
                 cmd, (int)plen, hex8(payload, plen).c_str());
 }
@@ -260,6 +269,20 @@ struct FFF3CB : NimBLECharacteristicCallbacks {
   }
 };
 
+struct H50CB : NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic *c, NimBLEConnInfo &conn) override {
+    std::string v = c->getValue();
+    if (v.size()) feed_rx((const uint8_t *)v.data(), v.size(), "9ABC");
+  }
+};
+
+struct H50SUB : NimBLECharacteristicCallbacks {
+  void onSubscribe(NimBLECharacteristic *c, NimBLEConnInfo &conn, uint16_t sub) override {
+    Serial.printf("[BLE] app %s notify 1234/H50 (sub=0x%04X)\n",
+                  sub ? "BAT" : "TAT", sub);
+  }
+};
+
 // ---------------- serial console ----------------
 void handle_serial() {
   if (!Serial.available()) return;
@@ -300,7 +323,7 @@ void setup() {
   NimBLEServer *srv = NimBLEDevice::createServer();
   srv->setCallbacks(new ServerCB());
 
-  NimBLEService *svc = srv->createService(SVC_UUID);
+  NimBLEService *svc = srv->createService(SVC_H1);
   NimBLECharacteristic *c1 = svc->createCharacteristic(
       CHR_FFF1, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   c1->setCallbacks(new FFF1CB());
@@ -316,8 +339,20 @@ void setup() {
 
   g_chFFF1 = c1;
 
+  // ---- H50: service FFFF, write 9ABC, notify 1234 ----
+  NimBLEService *svcH50 = srv->createService(SVC_H50);
+  NimBLECharacteristic *h50w = svcH50->createCharacteristic(
+      CHR_9ABC, NIMBLE_PROPERTY::WRITE);
+  h50w->setCallbacks(new H50CB());
+  NimBLECharacteristic *h50n = svcH50->createCharacteristic(
+      CHR_1234, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  h50n->setCallbacks(new H50SUB());
+  svcH50->start();
+  g_ch1234 = h50n;
+
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
-  adv->addServiceUUID(SVC_UUID);
+  adv->addServiceUUID(SVC_H1);
+  adv->addServiceUUID(SVC_H50);
   // Tat scan response: dat CA ten va service vao goi ADV chinh (31 byte van du)
   // de app loc theo ten HAY theo service FFF0 deu thay ngay. ( setName canh
   // bao: init() khong tu dua ten vao ADV.)
