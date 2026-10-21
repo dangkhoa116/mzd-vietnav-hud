@@ -318,6 +318,10 @@ void setup() {
 
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
   adv->addServiceUUID(SVC_UUID);
+  adv->enableScanResponse(true);
+  // BAT BUOC: NimBLEDevice::init(name) KHONG tu dua ten vao goi quang ba;
+  // khong co setName thi app quet theo ten se khong thay thiet bi.
+  adv->setName(std::string(g_name.c_str()));
   NimBLEDevice::startAdvertising();
   Serial.println("[BLE] dang quang ba \"" + g_name + "\" (service FFF0)");
 }
