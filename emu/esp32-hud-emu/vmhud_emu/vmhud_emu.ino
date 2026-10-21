@@ -24,6 +24,10 @@
 #include <NimBLEDevice.h>
 #include "mbedtls/md5.h"   // co san trong core esp32
 
+// forward declaration: Arduino tu sinh prototype cho cac ham .ino DAT TRUOC
+// dinh nghia struct o duoi, nen phai bao truoc o day.
+struct NavInfo;
+
 // ---------------- cau hinh (doi duoc qua serial) ----------------
 String g_name     = "VMHUD-EMU";     // phai chua "HUD", KHONG chua "TPMS"
 String g_model    = "H50";
