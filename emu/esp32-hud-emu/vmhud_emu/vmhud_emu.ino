@@ -255,7 +255,7 @@ struct ServerCB : NimBLEServerCallbacks {
     g_connected = false;
     g_rxlen = 0;
     Serial.printf("[BLE] ngat ket noi (reason=%d) - quang ba lai\n", reason);
-    NimBLEDevice::startAdvertising();
+    NimBLEDevice::startAdvertising(0);
   }
 };
 
@@ -291,6 +291,25 @@ struct H50SUB : NimBLECharacteristicCallbacks {
   void onSubscribe(NimBLECharacteristic *c, NimBLEConnInfo &conn, uint16_t sub) override {
     Serial.printf("[BLE] app %s notify 1234/H50 (sub=0x%04X)\n",
                   sub ? "BAT" : "TAT", sub);
+  }
+};
+
+// ---------------- scan-request notifier (instance 1, extended) ----------------
+struct AdvCB : NimBLEExtAdvertisingCallbacks {
+  uint32_t lastMs = 0;
+  uint32_t cnt = 0;
+  String lastAddr = "";
+  void onScanRequest(NimBLEExtAdvertising *pAdv, uint8_t instId, NimBLEAddress addr) override {
+    uint32_t now = millis();
+    String a = std::string(addr.toString()).c_str();
+    cnt++;
+    if (now - lastMs > 2000 || a != lastAddr) {
+      Serial.printf("[SCAN] %s dang quet board (instance %d, %lu req)\n",
+                    a.c_str(), instId, (unsigned long)cnt);
+      lastMs = now;
+      cnt = 0;
+      lastAddr = a;
+    }
   }
 };
 
@@ -361,16 +380,36 @@ void setup() {
   svcH50->start();
   g_ch1234 = h50n;
 
-  NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
-  adv->addServiceUUID(SVC_H1);
-  adv->addServiceUUID(SVC_H50);
-  // Tat scan response: dat CA ten va service vao goi ADV chinh (31 byte van du)
-  // de app loc theo ten HAY theo service FFF0 deu thay ngay. ( setName canh
-  // bao: init() khong tu dua ten vao ADV.)
-  adv->enableScanResponse(false);
-  adv->setName(std::string(g_name.c_str()));
-  NimBLEDevice::startAdvertising();
-  Serial.println("[BLE] dang quang ba \"" + g_name + "\" (service FFF0)");
+  // Quang ba 2 lop qua NimBLEExtAdvertising (can bat CONFIG_BT_NIMBLE_EXT_ADV
+  // trong nimconfig.h cua thu vien; ESP32-C3 ho tro):
+  //   instance 0: legacy PDUs, connectable - iOS phat hien & ket noi nhu cu
+  //   instance 1: extended, scannable, scan-req-notifier - moi app DANG QUET
+  //               gay dong [SCAN] tren serial (ky chan ben quet), dung de
+  //               chung minh app co thuc su quet hay khong.
+  NimBLEExtAdvertising *adv = NimBLEDevice::getAdvertising();
+  adv->setCallbacks(new AdvCB());
+  {
+    NimBLEExtAdvertisement legacy;
+    legacy.setLegacyAdvertising(true);
+    legacy.setConnectable(true);
+    legacy.setScannable(true);
+    legacy.addServiceUUID(SVC_H1);
+    legacy.addServiceUUID(SVC_H50);
+    legacy.setName(std::string(g_name.c_str()));
+    if (!adv->setInstanceData(0, legacy)) Serial.println("[ADV] LOI setInstanceData(0)");
+    if (!adv->start(0)) Serial.println("[ADV] LOI start(0)");
+  }
+  {
+    NimBLEExtAdvertisement ext;
+    ext.setLegacyAdvertising(false);
+    ext.setConnectable(false);
+    ext.setScannable(true);
+    ext.enableScanRequestCallback(true);
+    ext.setName(std::string(g_name.c_str()));
+    if (!adv->setInstanceData(1, ext)) Serial.println("[ADV] LOI setInstanceData(1)");
+    if (!adv->start(1)) Serial.println("[ADV] LOI start(1)");
+  }
+  Serial.println("[BLE] dang quang ba \"" + g_name + "\" (FFF0+FFFF, scan-req notifier BAT)");
 }
 
 void loop() {
