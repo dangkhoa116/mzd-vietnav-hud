@@ -9,6 +9,8 @@ mount, smctl, id, killall, ps and jci-dialog are stubs that log. The scripts
 run under BusyBox ash when BUSYBOX points at one (busybox-w32 on Windows),
 otherwise under the sh in PATH. VIETNAV_REAL_SM runs the install/rollback
 round trip on the car's own sm configs too (never commit those: JCI files).
+For the car's own tools, build BusyBox 1.19.2 with tests/build-busybox-1.19.sh
+and run with PATH holding only its applets (see that script).
 """
 import atexit
 import hashlib
@@ -633,7 +635,10 @@ def launcher_tests():
         c.write("stub.log", b"")
         c.seq(9)
         c.run("usb/install-patches.sh")
-        return next((l for l in c.stublog().splitlines() if "--3-button-dialog" in l), "")
+        # the whole call: its --text spans several log lines, up to the labels
+        log = c.stublog()
+        i = log.find("--3-button-dialog")
+        return log[i:log.find("--ok-label=", i)] if i >= 0 else ""
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav"])
@@ -659,7 +664,7 @@ def launcher_tests():
                                      % (c.t, c.t)).encode())
     c.seq(2, 0, 9)
     c.run("usb/install-patches.sh")
-    faces = [l for l in c.stublog().splitlines() if "--3-button-dialog" in l]
+    faces = [f.split("--ok-label=")[0] for f in c.stublog().split("--3-button-dialog")[1:]]
     check("launcher: after LAM TIEP the chooser shows the new state",
           len(faces) == 2 and "VIETNAV (HUD): CHUA CAI" in faces[0]
           and "VIETNAV (HUD): DA CAI AA / installed" in faces[1], c.stublog())
