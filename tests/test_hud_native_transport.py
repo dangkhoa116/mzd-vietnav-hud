@@ -39,6 +39,9 @@ def acl(att, handle=0x41):
 class NativeTransportTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if not TPMS.exists():
+            # Checkout rieng (repo private) - khong co tren CI khi chua cap token.
+            raise unittest.SkipTest('can checkout mzd-connect-tpms: %s' % TPMS)
         cls.work = tempfile.TemporaryDirectory(prefix='vietnav-hci-')
         cls.build = Path(cls.work.name)
         prepare.prepare(TPMS, cls.build)

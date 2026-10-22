@@ -43,7 +43,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev dbus
       - name: Install python deps
-        run: python3 -m pip install -r hud_emulator/requirements.txt
+        run: python3 -m pip install -r hud_emulator/requirements.txt pillow numpy
       - name: Run module
         run: python3 -m unittest "tests.${{ matrix.module }}" -v
       - name: Script test suites

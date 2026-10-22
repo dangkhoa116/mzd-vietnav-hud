@@ -19,7 +19,10 @@ try:
     import numpy  # noqa: F401  (vmlhud_arrow can numpy)
     import vmlhud_arrow as arrow
 except ImportError as exc:  # pragma: no cover
-    raise unittest.SkipTest('can Pillow va numpy: %s' % exc)
+    # Skip qua setUpModule: SkipTest ngay luc import lam unittest loader
+    # nem exception thay voi bao skip (thay tren CI).
+    def setUpModule():
+        raise unittest.SkipTest('can Pillow va numpy: %s' % exc)
 
 
 def icon(kind):
