@@ -138,6 +138,7 @@ def inspect_elf(path):
             raise ValueError('hard-float ABI (EF_ARM_ABI_FLOAT_HARD) is incompatible with the CMU')
 
         needed, soname = [], []
+        bind_now = False
         glibc, exports, undefined, relocs = set(), set(), set(), set()
         attributes = {}
         for sec in elf.iter_sections():
@@ -149,6 +150,13 @@ def inspect_elf(path):
             if isinstance(sec, DynamicSection):
                 needed = [tag.needed for tag in sec.iter_tags('DT_NEEDED')]
                 soname = [tag.soname for tag in sec.iter_tags('DT_SONAME')]
+                # DT_BIND_NOW / DF_BIND_NOW (0x8) / DF_1_NOW (0x1) -- xem
+                # ghi chu -Wl,-z,lazy o phan link.
+                bind_now = any(True for _ in sec.iter_tags('DT_BIND_NOW'))
+                for tag in sec.iter_tags('DT_FLAGS'):
+                    bind_now = bind_now or bool(tag.entry.d_val & 0x8)
+                for tag in sec.iter_tags('DT_FLAGS_1'):
+                    bind_now = bind_now or bool(tag.entry.d_val & 0x1)
             elif isinstance(sec, GNUVerNeedSection):
                 for _verneed, auxs in sec.iter_versions():
                     glibc.update(a.name for a in auxs if a.name.startswith('GLIBC_'))
@@ -171,7 +179,8 @@ def inspect_elf(path):
         if tuple(int(n) for n in version[6:].split('.')) > CMU_GLIBC:
             raise ValueError('%s exceeds the CMU glibc %d.%d' % (version, *CMU_GLIBC))
 
-    return dict(flags=flags, needed=needed, soname=soname, glibc=sorted(glibc),
+    return dict(flags=flags, needed=needed, soname=soname, bind_now=bind_now,
+                glibc=sorted(glibc),
                 exports=sorted(exports), undefined=sorted(undefined),
                 relocations=sorted(relocs),
                 abi={tag: attributes.get(tag) for tag in ABI_CRITICAL_TAGS})
@@ -188,6 +197,11 @@ def check(report, baseline=None):
     missing = WANT_EXPORTS - set(report['exports'])
     if missing:
         problems.append('missing interposed symbols: ' + ', '.join(sorted(missing)))
+
+    if report['bind_now']:
+        problems.append('lien ket BIND_NOW: loader glibc 2.11 cua CMU khong ap duoc '
+                        'relocation PLT cua lld o che do nay, tien trinh se SIGSEGV '
+                        'ngay trong constructor -- can -Wl,-z,lazy')
 
     unexpected = set(report['needed']) - ALLOWED_NEEDED
     if unexpected:
@@ -264,6 +278,14 @@ def main():
             library = build / 'libpatch-blmjcicarplay.so'
             zig('-target', TARGET, '-mcpu=' + MCPU, '-shared',
                 '-Wl,--no-undefined',
+                # BAT BUOC. zig mac dinh lien ket -z now (BIND_NOW); loader
+                # glibc 2.11 cua CMU khong ap duoc relocation PLT cua lld o che
+                # do do, nen lan goi ham ngoai dau tien nhay vao dia chi NULL va
+                # tien trinh chet ngay trong constructor. Da do thuc te duoi
+                # qemu-arm voi rootfs 74.00.333A: ban mac dinh SIGSEGV
+                # (si_addr=NULL) ngay sau "calling init", ban -z lazy chay dung.
+                # gcc 4.9 cua m3-toolchain mac dinh lazy nen khong dinh loi nay.
+                '-Wl,-z,lazy',
                 '-Wl,--version-script=' + str(HERE / 'exports.map'),
                 '-Wl,-soname,libpatch-blmjcicarplay.so',
                 *ldflags, *objects, '-lpthread', '-ldl', '-o', str(library), cwd=mazda)

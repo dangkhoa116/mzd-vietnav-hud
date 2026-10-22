@@ -187,6 +187,38 @@ không một dòng log nào. Đã loại được khả năng đó.
 **Vẫn là kiểm tĩnh.** Chứng minh shim nạp được và chen đúng chỗ, **không**
 chứng minh nó giải mã đúng khung iAP2 của VietMap.
 
+### 3c. ĐÃ DỰNG WSL2 — và bắt được một lỗi nghiêm trọng của bản zig
+
+Máy này nay có **WSL2 + Ubuntu 24.04**, `qemu-arm`, `m3-toolchain` (ở
+`~/m3-toolchain` trong WSL), và rootfs 74.00.333A giải lại đúng cách ở
+`~/rootfs-333`. Gọi từ Windows bằng `wsl.exe -d Ubuntu-24.04 -- bash <script>`.
+
+**Rootfs trên `/mnt/c/.../firmware/rootfs` mất toàn bộ symlink** (giải nén bằng
+Windows) nên `qemu-arm` không chạy được: thiếu `lib/ld-linux.so.3`. File
+`rootfs1/e0000000001.img` thật ra là **tar** (737 symlink) — giải lại trong
+Linux là xong.
+
+Mức 1 PASS hết: 136 unittest, 36+115 kiểm tra script, 43 kiểm tra C++, 8 test
+codec kèm sanitizer.
+
+**Lỗi tìm ra — quan trọng:** bản .so build bằng zig **SIGSEGV ngay trong
+constructor** khi nạp dưới đúng loader `ld-2.11.1.so` của xe (`si_addr=NULL`,
+ngay sau `calling init`). Mọi kiểm ELF tĩnh trước đó đều PASS mà không thấy gì.
+Cài bản đó lên xe thì `jciCARPLAY` crash-loop.
+
+Cô lập bằng `.so` C thuần chỉ có `write()`: preload thư viện của chính rootfs
+chạy, bản m3-toolchain chạy, **bản zig chết**. Nguyên nhân: zig mặc định liên
+kết **`-z now` (BIND_NOW)**, loader glibc 2.11 không áp được relocation PLT của
+lld ở chế độ đó. Thêm **`-Wl,-z,lazy`** là hết. `build_arm_zig.py` đã có cờ
+này, và cả nó lẫn `check_rootfs.py` nay **fail thẳng khi thấy BIND_NOW**.
+
+Sau khi sửa: zig (release+debug) và m3-toolchain (release+debug) đều nạp sạch,
+`check_rootfs.py` PASS cả hai. Bản m3 nhỏ hơn hẳn (release 31.283 B so với
+197.304 B) và sát file gốc trên xe (30.699 B) — **có Linux thì dùng m3**.
+
+Bài học rộng hơn: **kiểm ELF tĩnh không thay được một lần nạp thật.** Giờ đã có
+`qemu-arm`, luôn chạy bước nạp thử trước khi đưa .so cho chủ xe.
+
 ### 4. Việc tiếp theo, theo thứ tự
 
 1. **Cài bản debug lên xe rồi chạy `installer/vietnav-collect.sh`.** Đây là việc duy nhất
@@ -751,9 +783,11 @@ Emu không tái hiện radio TI/HFP/A2DP/LE đồng thời; không dùng kết q
   relay/encryption/quyền app còn là phần nghiên cứu chưa triển khai.
 - SID, runtime UID checksum và dấu vết API cấp quyền là ba thứ khác nhau.
   Không nhận nav chưa đủ để quy về server/serial.
-- **.so ARM build bằng zig chưa từng chạy trên xe.** Nó chỉ được kiểm bằng cách
-  đọc lại ELF và so với file đang chạy trên xe. Đúng ABI **không** có nghĩa là
-  đúng hành vi: libc++ link tĩnh và reloc TLS là hai thứ bản upstream không có.
+- **.so ARM build bằng zig chưa từng chạy trên xe.** Nay đã nạp được dưới
+  loader glibc 2.11 thật qua `qemu-arm`, nhưng đó mới là "nạp và chạy
+  constructor" trong busybox, không phải chạy thật trong `jciCARPLAY`.
+  Lần đầu kiểm tĩnh PASS hết mà .so vẫn SIGSEGV — **đừng coi kiểm ELF tĩnh là
+  bằng chứng chạy được**.
 - VietMap iOS không gọi `setManeuverType:` là **đã kiểm trong binary**, nhưng
   "vì vậy HUD trống" vẫn là **giả thuyết**: chưa có log nên chưa biết khung
   `0x8059` có tới `jciCARPLAY` khi chạy VietMap hay không. Nếu iOS không phát

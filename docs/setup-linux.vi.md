@@ -64,7 +64,13 @@ sudo apt-get install -y build-essential git python3-pip python3-venv \
 
 git clone https://github.com/dangkhoa116/mzd-vietnav-hud.git
 cd mzd-vietnav-hud
-python3 -m pip install -r hud_emulator/requirements.txt pillow numpy ziglang pyelftools
+
+# Ubuntu 24.04 theo PEP 668: cai thang vao he thong se bi tu choi
+# (externally-managed-environment). Phai dung venv.
+python3 -m venv ~/.venv-hud
+~/.venv-hud/bin/pip install -r hud_emulator/requirements.txt \
+    pillow numpy ziglang pyelftools
+export PATH=~/.venv-hud/bin:$PATH
 ```
 
 Chạy:
@@ -161,8 +167,31 @@ chạy thêm `native/build_arm.py` (bộ kiểm ELF ARM) và
 ### 2.5 Chạy BusyBox và công cụ của xe
 
 ```sh
-qemu-arm -L <rootfs> <rootfs>/bin/busybox          # phải in BusyBox v1.19.2
+qemu-arm -L ~/rootfs-333 ~/rootfs-333/bin/busybox   # phải in BusyBox v1.19.2
 ```
+
+### 2.6 BẮT BUỘC: nạp thử .so dưới loader của xe
+
+Kiểm ELF tĩnh **không đủ**. Luôn chạy bước này trước khi đưa .so cho chủ xe:
+
+```sh
+cp <shim>.so ~/rootfs-333/tmp/shim.so
+qemu-arm -L ~/rootfs-333 -E LD_PRELOAD=/tmp/shim.so \
+    ~/rootfs-333/bin/busybox echo hello
+```
+
+Đúng thì in `hello`. Sai thì `qemu: uncaught target signal 11`.
+
+Bước này đã bắt được một lỗi thật mà **toàn bộ kiểm ELF tĩnh bỏ sót**: zig liên
+kết mặc định `-z now` (BIND_NOW), loader glibc 2.11 không áp được relocation
+PLT của lld ở chế độ đó nên .so SIGSEGV ngay trong constructor — cài lên xe là
+`jciCARPLAY` crash-loop. Cách sửa (`-Wl,-z,lazy`) đã nằm trong
+`build_arm_zig.py`. Chi tiết trong
+[patches/carplay-hud/README.md](../patches/carplay-hud/README.md).
+
+Khi nghi ngờ, cô lập bằng một `.so` C thuần chỉ có `write()` trong constructor,
+rồi so ba trường hợp: preload thư viện của chính rootfs (đối chứng), bản
+m3-toolchain, và bản đang nghi.
 
 ## Mức 3 — mzd-connect-emu đầy đủ
 
@@ -210,15 +239,23 @@ Giải nén **bỏ `/dev`, không giữ owner**, rồi đặt tiếp các file t
 `resources/` đúng chỗ theo `files.ini`, và kiểm `rootfs.md5`. Chi tiết trong
 [emu-yeu-cau.md](emu-yeu-cau.md).
 
-Trên máy Windows hiện tại đã có sẵn:
+**Cảnh báo đã gặp thật:** cây `rootfs` giải sẵn trên Windows ở
+`C:/work/mazda/work/firmware/rootfs` **mất toàn bộ symlink** (NTFS/giải bằng
+Windows), nên thiếu `lib/ld-linux.so.3` và `qemu-arm` báo
+`Could not open '/lib/ld-linux.so.3'`. **Đừng dùng cây đó cho qemu.**
 
-```text
-C:/work/mazda/work/firmware/rootfs                     (74.00.333A, đã giải)
-C:/work/mazda/CMU-FWs/.../cmu150_ADR_74.00.333A_mass.up
+Giải lại trong Linux. File `rootfs1/e0000000001.img` (482 MB) tuy đuôi `.img`
+nhưng thật ra là **tar**, chứa 737 symlink:
+
+```sh
+mkdir -p ~/rootfs-333
+tar -xf /mnt/c/work/mazda/work/firmware/rootfs1/e0000000001.img \
+    -C ~/rootfs-333 --exclude=./dev --no-same-owner
+ls -l ~/rootfs-333/lib/ld-linux.so.3      # phai la symlink -> ld-2.11.1.so
 ```
 
-Dùng WSL2 thì truy cập thẳng qua `/mnt/c/work/mazda/work/firmware/rootfs`,
-khỏi giải lại.
+Ra ~476 MB. Đặt trong ext4 của WSL (không phải `/mnt/c`) vừa nhanh vừa giữ
+được symlink.
 
 ## Chạy xong thì phải thấy gì
 
@@ -227,9 +264,15 @@ khỏi giải lại.
 | 1 | `make -C tests test-carplay` | `43 kiem tra, 0 loi` |
 | 1 | `python3 tests/test_esp32_hud.py -v` | OK, không lỗi sanitizer |
 | 1 | `tests/test_installer.py` dưới BusyBox | toàn bộ PASS |
-| 2 | `qemu-arm -L <rootfs> <rootfs>/bin/busybox` | `BusyBox v1.19.2` |
+| 2 | `qemu-arm -L ~/rootfs-333 .../busybox` | `BusyBox v1.19.2` |
 | 2 | `check_rootfs.py` | `KẾT QUẢ: PASS` cả bốn mục |
+| 2 | **nạp thử .so (2.6)** | in `hello`, không `signal 11` |
 | 2 | `native/run_tests.sh <toolchain>` | không lỗi |
+
+Đã chạy thật ngày 22-10-2026 trên WSL2 Ubuntu 24.04: Mức 1 PASS toàn bộ
+(136 unittest, 36+115 kiểm tra script, 43 kiểm tra C++, 8 test codec kèm
+sanitizer); Mức 2 PASS tới hết 2.6 cho cả bản zig lẫn bản m3-toolchain.
+Mức 3 chưa chạy.
 
 ## Linux vẫn KHÔNG giải quyết được gì
 

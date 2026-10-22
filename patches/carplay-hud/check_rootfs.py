@@ -28,6 +28,7 @@ import argparse
 import os
 import sys
 
+from elftools.elf.dynamic import DynamicSection
 from elftools.elf.elffile import ELFFile
 
 # Console Windows mặc định cp1252, không in nổi tiếng Việt. Đặt thẳng ở đây chứ
@@ -46,11 +47,11 @@ OEM_SYMBOLS = {
     ],
 }
 
-# Thư viện cung cấp symbol cho shim khi nạp trên xe.
-PROVIDERS = [
-    'lib/libc-2.11.1.so', 'lib/libpthread-2.11.1.so', 'lib/libdl-2.11.1.so',
-    'lib/ld-2.11.1.so', 'lib/libm-2.11.1.so', 'lib/libgcc_s.so.1',
-]
+# Nơi tìm thư viện trong rootfs khi giải DT_NEEDED.
+LIB_DIRS = ('lib', 'usr/lib', 'jci/lib')
+
+# Luôn tính vào, kể cả khi không nằm trong DT_NEEDED: loader và libgcc.
+EXTRA_PROVIDERS = ['lib/ld-2.11.1.so', 'lib/libgcc_s.so.1']
 
 # Symbol shim interpose, tức phải có ai đó trong tiến trình gọi tới.
 INTERPOSED = ['msgrcv', 'eDevMgrRegisterProcess', 'eDevMgriPodStartCallStateUpdates',
@@ -75,7 +76,13 @@ def dynsyms(path):
                     continue
                 name = sym.name.split('@')[0]
                 if sym['st_shndx'] == 'SHN_UNDEF':
-                    undefined.add(name)
+                    # Undefined WEAK là hợp lệ: loader để NULL và code tự kiểm
+                    # trước khi gọi (__gmon_start__, _Jv_RegisterClasses,
+                    # _ITM_*TMCloneTable mà gcc luôn phát ra). File .so gốc
+                    # đang chạy trên xe cũng có đúng bốn cái đó.
+                    # native/build_arm.py lọc weak theo cùng lý do.
+                    if sym['st_info']['bind'] != 'STB_WEAK':
+                        undefined.add(name)
                 elif sym['st_info']['bind'] in ('STB_GLOBAL', 'STB_WEAK'):
                     exported.add(name)
     except (OSError, Exception):
@@ -102,15 +109,44 @@ def check_oem(rootfs, report):
     return ok
 
 
+def find_lib(rootfs, soname):
+    """Tìm soname trong rootfs. Bản giải nén bằng Windows mất hết symlink, nên
+    phải dò thêm tên có số phiên bản (libc.so.6 -> libc-2.11.1.so)."""
+    for directory in LIB_DIRS:
+        path = os.path.join(rootfs, directory, soname)
+        if os.path.isfile(path):
+            return path
+    stem = soname.split('.so')[0]
+    for directory in LIB_DIRS:
+        full = os.path.join(rootfs, directory)
+        if not os.path.isdir(full):
+            continue
+        for name in sorted(os.listdir(full)):
+            if name.startswith(stem + '-') and '.so' in name:
+                return os.path.join(full, name)
+    return None
+
+
 def check_link(rootfs, shim, report):
     print()
     print('== 2. Shim có link nổi trên glibc của xe không ==')
+    with open(shim, 'rb') as fh:
+        sonames = []
+        for sec in ELFFile(fh).iter_sections():
+            if isinstance(sec, DynamicSection):
+                sonames = [t.needed for t in sec.iter_tags('DT_NEEDED')]
     provided = set()
-    for relative in PROVIDERS:
-        path = os.path.join(rootfs, relative)
+    for soname in sonames:
+        path = find_lib(rootfs, soname)
+        if path is None:
+            print('   ** rootfs không có %s (DT_NEEDED) **' % soname)
+            continue
         exported, _ = dynsyms(path)
-        if not exported:
-            print('   ** không đọc được %s **' % relative)
+        print('   %-22s -> %s (%d symbol)'
+              % (soname, os.path.relpath(path, rootfs).replace(os.sep, '/'), len(exported)))
+        provided |= exported
+    for relative in EXTRA_PROVIDERS:
+        exported, _ = dynsyms(os.path.join(rootfs, relative))
         provided |= exported
     _, needed = dynsyms(shim)
     if not needed:

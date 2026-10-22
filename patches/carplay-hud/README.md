@@ -93,8 +93,14 @@ Kết quả (zig 0.16.0, target `arm-linux-gnueabi.2.4.0`, `-mcpu=cortex_a9+neon
 
 | Bản | Kích thước | Log |
 | --- | --- | --- |
-| release | 197.336 B | chỉ ERROR (như upstream) |
-| debug | 3.365.148 B | có `nav PICK`, `nav TEXT-FALLBACK` |
+| release | 197.304 B | chỉ ERROR (như upstream) |
+| debug | 3.865.688 B | có `nav PICK`, `nav TEXT-FALLBACK` |
+
+Có máy Linux thì **nên dùng m3-toolchain** thay vì zig: nó là đúng trình biên
+dịch upstream, không có hai điểm lệch nói ở dưới, và ra file nhỏ hơn nhiều —
+release **31.283 B**, debug **321.389 B**, sát file gốc đang chạy trên xe
+(30.699 B). Cách build trong
+[docs/setup-linux.vi.md](../../docs/setup-linux.vi.md) mục 2.3.
 
 Đã kiểm trong chuỗi byte của file: bản debug **có** `nav PICK` và
 `TEXT-FALLBACK`, bản release **không** — đúng thiết kế `log.h` của upstream.
@@ -194,8 +200,41 @@ Chạy trên rootfs CMU150 `74.00.333A` — **PASS cả bốn mục**:
 4. `jciCARPLAY` có trong **cả `sm.conf` lẫn `sm_WCP.conf`** — khớp logic chọn
    config (có dây / không dây) của `install/install.sh`.
 
-**Giới hạn:** đây là kiểm **tĩnh**. Nó chứng minh shim nạp được và chen đúng
-chỗ; nó **không** chứng minh shim giải mã đúng khung iAP2 mà VietMap sinh ra.
+### Nạp thật dưới loader của xe (qemu-arm) — và một lỗi nghiêm trọng đã tìm ra
+
+Kiểm tĩnh **không đủ**. Khi có máy Linux (xem
+[docs/setup-linux.vi.md](../../docs/setup-linux.vi.md)), nạp thử .so dưới đúng
+`ld-2.11.1.so` của xe:
+
+```sh
+qemu-arm -L <rootfs> -E LD_PRELOAD=/tmp/shim.so <rootfs>/bin/busybox echo hello
+```
+
+Bản zig **đầu tiên SIGSEGV ngay trong constructor** — `si_addr=NULL`, ngay sau
+dòng `calling init` của loader. Toàn bộ kiểm ELF tĩnh trước đó đều PASS mà
+không thấy gì. Nếu cài bản đó lên xe, `jciCARPLAY` sẽ crash-loop.
+
+Cô lập bằng một `.so` C thuần chỉ có `write()` trong constructor:
+
+| Build | Kết quả |
+| --- | --- |
+| preload thư viện của chính rootfs (đối chứng) | chạy |
+| m3-toolchain, cùng file `.c` | chạy |
+| **zig, cùng file `.c`** | **SIGSEGV** |
+
+Nguyên nhân: **zig liên kết mặc định `-z now` (BIND_NOW)**, và loader glibc
+2.11 không áp được relocation PLT của lld ở chế độ đó, nên lần gọi hàm ngoài
+đầu tiên nhảy vào địa chỉ NULL. `gcc 4.9` của m3-toolchain mặc định lazy
+binding nên không dính. Thêm **`-Wl,-z,lazy`** là hết; đã có trong
+`build_arm_zig.py`, và `check_rootfs.py`/`build_arm_zig.py` nay **fail thẳng**
+nếu thấy BIND_NOW, để lỗi này không quay lại im lặng.
+
+Sau khi sửa, cả bản zig lẫn bản m3-toolchain (release + debug) đều nạp sạch và
+in `hello`.
+
+**Giới hạn:** `qemu-arm` + busybox chỉ chứng minh .so **nạp và chạy được
+constructor** dưới loader của xe. Nó **không** chứng minh shim giải mã đúng
+khung iAP2 mà VietMap sinh ra.
 Việc đó vẫn phải có log trên xe. Ghi chú thêm: `NaviSupported` trong
 `etc/devmgr_config_master.xml` của rootfs gốc là `FALSE` — installer phải đặt
 `TRUE`, đúng như `install/install.sh` đang làm.
@@ -209,9 +248,9 @@ Việc đó vẫn phải có log trên xe. Ghi chú thêm: `NaviSupported` trong
   patch này không cứu được gì — lúc đó lỗi nằm ngoài tầm với của phía xe.
 - Chuỗi `maneuverDesc` thật của VietMap chưa được đọc lần nào; bộ từ khoá dựng
   theo cách hành văn thường gặp. Có log rồi thì chỉnh lại cho khớp.
-- **Bản .so ARM chưa từng chạy trên xe.** Nó chỉ được kiểm bằng cách đọc lại
-  ELF và so với file đang chạy trên xe (xem trên). Đúng ABI không có nghĩa là
-  đúng hành vi.
+- **Bản .so ARM chưa từng chạy trên xe.** Nay đã nạp được dưới đúng loader
+  glibc 2.11 của xe qua `qemu-arm` (xem mục dưới), nhưng đó mới là "nạp và
+  chạy constructor", không phải chạy thật trong `jciCARPLAY`.
 - Bản debug thì nay **đã build được** (trước đây bế tắc vì thiếu toolchain).
   Việc còn lại là cài nó rồi chạy `vietnav-collect.sh` để lấy dòng
   `nav PICK` / `nav TEXT-FALLBACK` trên xe.
