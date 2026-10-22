@@ -104,5 +104,5 @@ jobs:
           sudo apt-get install -y libwayland-dev pkg-config
       - name: Build host bridge
         run: bash emu/scripts/build.sh
-      - name: Smoke: prepare.py runs
+      - name: "Smoke: prepare.py runs"
         run: python3 emu/scripts/prepare.py --help >/dev/null
