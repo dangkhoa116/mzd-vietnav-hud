@@ -23,6 +23,19 @@ permissions:
 jobs:
   host-suite:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - test_hud_native
+          - test_hud_native_transport
+          - test_hud_native_usb
+          - test_hud_protocol
+          - test_hud_bluez
+          - test_vmlhud_bridge
+          - test_vmlhud_arrow
+          - test_vmlhud_hud_out
+    name: unit ${{ matrix.module }}
     steps:
       - uses: actions/checkout@v4
       - name: Install host deps
@@ -31,20 +44,8 @@ jobs:
           sudo apt-get install -y libssl-dev dbus
       - name: Install python deps
         run: python3 -m pip install -r hud_emulator/requirements.txt
-      - name: Python unit tests (per module for clear failures)
-        run: |
-          fail=0
-          for m in test_hud_native test_hud_native_transport test_hud_native_usb \
-                   test_hud_protocol test_hud_bluez test_vmlhud_bridge \
-                   test_vmlhud_arrow test_vmlhud_hud_out; do
-            echo "::group::$m"
-            if ! python3 -m unittest "tests.$m" -v; then
-              echo "FAILED MODULE: $m"
-              fail=1
-            fi
-            echo "::endgroup::"
-          done
-          exit $fail
+      - name: Run module
+        run: python3 -m unittest "tests.${{ matrix.module }}" -v
       - name: Script test suites
         run: |
           python3 bridge/vmlhud_frame_test.py
