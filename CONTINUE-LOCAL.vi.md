@@ -4,6 +4,39 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## ĐƯỜNG TẮT CẦN THỬ TRƯỚC: VietMap qua CarPlay có thể đã lên HUD sẵn
+
+Chủ xe xác nhận **dẫn đường Google Maps trên HUD đã chạy ổn**. Trên xe này
+đường đó là `repos/mazda-carplay-hud` (CarPlay → HUD). Kiểm lại hai đầu:
+
+- `docs/how-it-works.md` của cầu đó cho thấy nó **không phụ thuộc app nào**: nó
+  chỉ tap thụ động `msgrcv` trong `jciCARPLAY` để lấy `viAP2NavRouteManeuverUpdate`
+  (`0x8059` / `0x8058`) do **chính iPhone** phát ra cho app CarPlay nào đang dẫn
+  đường, rồi đẩy sang `com.jci.vbs.navi`. Điều kiện bật là
+  `NaviSupported=TRUE` trong `/etc/devmgr_config_master.xml` — installer đã đặt.
+- VIETMAP LIVE 3.4.3 **là app dẫn đường CarPlay đầy đủ**: `Info.plist` khai cả
+  `CPTemplateApplicationSceneSessionRoleApplication` lẫn
+  `CPTemplateApplicationDashboardSceneSessionRoleApplication`
+  (`VIETMAPCarPlayDashboardManager2`), và binary ký kèm entitlement
+  **`com.apple.developer.carplay-maps`** — đúng entitlement khiến iOS coi nó là
+  app dẫn đường CarPlay và phát luồng iAP2 nói trên.
+
+**Suy ra**: cắm iPhone chạy CarPlay, mở VIETMAP LIVE, bắt đầu một tuyến — mũi
+tên, khoảng cách và tên đường nhiều khả năng lên HUD **ngay**, cùng đường ống
+Google Maps đang dùng, **không cần một dòng code nào của nhánh BLE**.
+
+Thử mất 10 phút và nên thử TRƯỚC khi làm tiếp nhánh BLE. Hai thứ có thể chặn:
+
+1. Tên đường tiếng Việt: HUD không vẽ được ký tự Latin 3 byte, phải có `fold`
+   (`translit.h`). Bản CarPlay trong repos đã có `[VN-PATCH]` nên khả năng đã xử lý.
+2. Nếu HUD của xe đang chạy qua **Android Auto** chứ không phải CarPlay, thì
+   đường tương đương là chạy VIETMAP LIVE trên Android Auto (app có mục
+   "CarPlay/Android Auto" trong Cài đặt).
+
+**Nhánh BLE giả HUD vẫn có giá trị riêng** khi: không muốn cắm CarPlay/AA, muốn
+dẫn đường chạy nền trong lúc màn hình để app khác, hoặc dùng điện thoại Android
+không có AA. Nhưng nếu chỉ cần "dẫn đường như Google Maps" thì thử CarPlay trước.
+
 ## Cập nhật phiên 22-10-2026 (lần 4): ĐÃ CÓ DẪN ĐƯỜNG THẬT TRÊN EMULATOR
 
 Mục tiêu số 1 của bàn giao trước đã xong. App VIETMAP LIVE 3.4.3 trên iPhone
