@@ -10,6 +10,9 @@
 
 String g_name="VMHUD-EMU", g_model="H50", g_hw="1.0.0", g_fw="1.0.0";
 String g_protocol="2.2.2S", g_sid="VMEMU0000001";
+// A real HUD belongs to one device family and may carry manufacturer data.
+// Both are configurable so a phone-side filter can be probed without reflashing.
+String g_adv="BOTH", g_mfg="";
 Preferences g_store;
 std::mutex g_cfgMutex;
 std::atomic<bool> g_connected{false};
@@ -130,14 +133,27 @@ struct AdvCB : NimBLEExtAdvertisingCallbacks {
   }
 };
 #endif
+std::string manufacturerBytes() {
+  std::string raw;
+  for (size_t i=0;i+1<g_mfg.length();i+=2)
+    raw+=(char)strtol(g_mfg.substring(i,i+2).c_str(),nullptr,16);
+  return raw;
+}
+// Legacy advertising carries 31 bytes total; the caller reports a rejected payload.
+template <typename Advertisement> void fillAdvertisement(Advertisement &data) {
+  if (g_adv=="BOTH" || g_adv=="FFF0") data.addServiceUUID("FFF0");
+  if (g_adv=="BOTH" || g_adv=="FFFF") data.addServiceUUID("FFFF");
+  data.setName(std::string(g_name.c_str()));
+  if (g_mfg.length()>=2) data.setManufacturerData(manufacturerBytes());
+}
 void setupAdvertising() {
   auto *adv=NimBLEDevice::getAdvertising();
 #if CONFIG_BT_NIMBLE_EXT_ADV
   adv->setCallbacks(new AdvCB());
   NimBLEExtAdvertisement primary;
   primary.setLegacyAdvertising(true);primary.setConnectable(true);primary.setScannable(true);
-  primary.setFlags(0x06);primary.addServiceUUID("FFF0");primary.addServiceUUID("FFFF");
-  primary.setName(std::string(g_name.c_str()));
+  primary.setFlags(0x06);
+  fillAdvertisement(primary);
   if (!adv->setInstanceData(0,primary)) Serial.println("[ADV] primary configuration FAILED");
   startConnectable();
   NimBLEExtAdvertisement diagnostic;
@@ -147,13 +163,15 @@ void setupAdvertising() {
   Serial.println("[ADV] optional extended scan diagnostic enabled; absence of SCAN proves nothing about VietMap");
 #else
   NimBLEAdvertisementData primary;
-  primary.setFlags(0x06);primary.addServiceUUID("FFF0");primary.addServiceUUID("FFFF");
-  primary.setName(std::string(g_name.c_str()));
+  primary.setFlags(0x06);
+  fillAdvertisement(primary);
   adv->enableScanResponse(false);
-  if (!adv->setAdvertisementData(primary)) Serial.println("[ADV] primary configuration FAILED");
+  if (!adv->setAdvertisementData(primary))
+    Serial.println("[ADV] primary configuration FAILED; payload may exceed 31 bytes");
   startConnectable();
 #endif
-  Serial.println("[BLE] name and FFF0+FFFF are in primary advertisement: "+g_name);
+  Serial.printf("[BLE] advertising name=%s services=%s mfg=%s\n",
+                g_name.c_str(),g_adv.c_str(),g_mfg.length()?g_mfg.c_str():"(none)");
 }
 void handleSerial() {
   static String line;
@@ -170,8 +188,9 @@ void handleSerial() {
     line.trim();
     if (line=="STATUS") {
       std::lock_guard<std::mutex> guard(g_cfgMutex);
-      Serial.printf("[CFG] name=%s model=%s hw=%s fw=%s protocol=%s sid=%s connected=%d\n",
-                    g_name.c_str(),g_model.c_str(),g_hw.c_str(),g_fw.c_str(),g_protocol.c_str(),g_sid.c_str(),g_connected.load());
+      Serial.printf("[CFG] name=%s model=%s hw=%s fw=%s protocol=%s sid=%s adv=%s mfg=%s connected=%d\n",
+                    g_name.c_str(),g_model.c_str(),g_hw.c_str(),g_fw.c_str(),g_protocol.c_str(),g_sid.c_str(),
+                    g_adv.c_str(),g_mfg.length()?g_mfg.c_str():"-",g_connected.load());
     } else if (line=="PING") {
       const uint8_t known[]={0xa5,0x5a,0x37,0xc3,0,0,0,0x0e,0,0,0,0,0x0e,0,0x4d,0xc6,0x42,0x15,0xc1,0xc4,0x8d,0xa3};
       vmhud::Frame parsed;
@@ -186,13 +205,26 @@ void handleSerial() {
       if (key=="PROTOCOL") { target=&g_protocol;storeKey="protocol"; }
       if (key=="SID") { target=&g_sid;storeKey="sid"; }
       if (key=="NAME") { target=&g_name;storeKey="name"; }
+      if (key=="ADV") { target=&g_adv;storeKey="adv"; }
+      if (key=="MFG") { target=&g_mfg;storeKey="mfg"; }
       bool valid=target && value.length()>0 && value.length()<=64 && value.indexOf(',')<0 && value.indexOf(':')<0;
       if (key=="NAME") valid=valid && value.length()<=20 && value.indexOf("HUD")>=0 && value.indexOf("TPMS")<0;
+      if (key=="ADV") valid=target && (value=="BOTH" || value=="FFF0" || value=="FFFF" || value=="NONE");
+      if (key=="MFG") {
+        // Empty clears it; otherwise whole hex bytes that still fit the 31-byte payload.
+        valid=target && value.length()<=40 && (value.length()%2)==0;
+        for (unsigned i=0;valid && i<value.length();i++) valid=isHexadecimalDigit(value[i]);
+      }
       if (valid) {
         { std::lock_guard<std::mutex> guard(g_cfgMutex);*target=value; }
         if (!g_store.putString(storeKey,value)) Serial.println("[CFG] NVS write FAILED");
-        else Serial.println("[CFG] saved "+key+(key=="NAME"?"; reset board to apply name":""));
-      } else Serial.println("[CFG] STATUS / PING / MODEL:x / HW:x / FW:x / PROTOCOL:x / SID:x / NAME:x");
+        else {
+          // Only the HUDInfo fields take effect live; the advertisement is built at boot.
+          const bool atBoot=key=="NAME"||key=="ADV"||key=="MFG";
+          Serial.println("[CFG] saved "+key+(atBoot?"; reset board to apply":""));
+        }
+      } else Serial.println("[CFG] STATUS / PING / MODEL:x / HW:x / FW:x / PROTOCOL:x / SID:x / NAME:x"
+                            " / ADV:BOTH|FFF0|FFFF|NONE / MFG:<hex or empty>");
     }
     line="";
   }
@@ -204,6 +236,7 @@ void setup() {
     g_name=g_store.getString("name",g_name);g_model=g_store.getString("model",g_model);
     g_hw=g_store.getString("hw",g_hw);g_fw=g_store.getString("fw",g_fw);
     g_protocol=g_store.getString("protocol",g_protocol);g_sid=g_store.getString("sid",g_sid);
+    g_adv=g_store.getString("adv",g_adv);g_mfg=g_store.getString("mfg",g_mfg);
   }
   NimBLEDevice::init(std::string(g_name.c_str()));
   NimBLEServer *server=NimBLEDevice::createServer();server->setCallbacks(new ServerCB());
@@ -220,6 +253,6 @@ void setup() {
   g_h50->setCallbacks(new SubscribeCB());
   h50->createCharacteristic("9ABC",writable)->setCallbacks(new WriteCB(g_h50,"9ABC",&g_rxH50));
   h50->start();setupAdvertising();
-  Serial.println("[EMU] Serial 115200: STATUS, PING, MODEL:x, PROTOCOL:x, SID:x, NAME:x");
+  Serial.println("[EMU] Serial 115200: STATUS, PING, MODEL:x, PROTOCOL:x, SID:x, NAME:x, ADV:x, MFG:x");
 }
 void loop() { handleSerial();delay(10); }

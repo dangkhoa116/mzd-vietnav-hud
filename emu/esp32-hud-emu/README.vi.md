@@ -2,8 +2,14 @@
 
 Board **ESP32-C3 Mini/Super Mini 4MB** dùng được làm BLE peripheral. Công cụ
 này quảng bá `VMHUD-EMU`, cung cấp hai họ GATT HUD, trả HUDInfo và ghi lại
-khung app gửi. **Chưa có kết quả kết nối board/điện thoại thật; chưa xuất dữ
-liệu lên HUD Mazda.** C3 không có Bluetooth Classic/SPP.
+khung app gửi. C3 không có Bluetooth Classic/SPP.
+
+Ngày 22-10-2026 đã chạy `ble_central_probe.py` từ PC Windows qua **radio BLE
+thật** trên board đã nạp ảnh khớp source: **22/22 check pass** cho cả hai họ
+thiết bị (quảng bá, kết nối, subscribe, HUDInfo có kiểm checksum, nav tiếng
+Việt qua ghi phân mảnh 20 byte, heartbeat CRC16 legacy, kết thúc dẫn đường).
+**Vẫn chưa có bằng chứng VIETMAP LIVE tìm thấy/chấp nhận thiết bị, và chưa
+xuất dữ liệu lên HUD Mazda.** PC đóng vai central không thay được app thật.
 
 Mục tiêu trước mắt: kiểm VIETMAP LIVE trên điện thoại của chủ xe có nhận
 profile này và gửi dẫn đường hay không. Việc đó độc lập với BlueZ/kernel CMU.
@@ -30,6 +36,28 @@ Dùng **`vmhud-c3-merged.bin`** cho lần thử đầu. File
 scan request; chưa có kiểm chứng phần cứng và không cần cho bài thử chính.
 Mỗi ảnh có checksum trong `BUILD-REPORT.json`/`SHA256SUMS`; source đi kèm
 trong `source/`. Không dùng ảnh này cho ESP32 thường, S2 hay S3.
+
+## Kiểm board qua BLE thật, không cần điện thoại
+
+Chạy trước khi thử app: nếu bước này fail thì lỗi nằm ở board/firmware, không
+phải ở app. Cần `python -m pip install bleak` (và `pyserial` cho `--port`).
+
+```sh
+python emu/esp32-hud-emu/ble_central_probe.py --port COM3 --log out/ble-probe.json
+```
+
+PC đóng vai central thay app: quét theo tên, kết nối, subscribe, yêu cầu
+HUDInfo, rồi gửi nav tiếng Việt, heartbeat legacy và lệnh kết thúc dẫn đường.
+Mỗi khung được ghi thành từng đoạn 20 byte để kiểm đúng đường gom mảnh ở ATT
+MTU mặc định 23. Có `--port` thì Serial log của board được in theo từng bước.
+Thoát khác 0 nếu có check fail; `--log` ghi transcript JSON để đối chiếu sau.
+
+Thêm `--family h1` hoặc `--family h50` nếu chỉ muốn thử một họ, `--address` để
+bỏ qua quét, `--current-road`/`--next-road` để đổi tên đường thử.
+
+**Giới hạn:** bài này xác nhận board, GATT và định dạng khung. Nó **không**
+chứng minh VIETMAP LIVE quét thấy hay chấp nhận thiết bị — bộ lọc, cấp quyền
+và nhánh profile của app chỉ kiểm được bằng phiên app thật ở mục dưới.
 
 ## Lấy log và thử trong app
 
