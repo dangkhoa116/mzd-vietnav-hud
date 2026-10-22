@@ -4,6 +4,35 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## Cập nhật 22-10 (tối muộn hơn nữa): CI Linux chạy toàn bộ test mỗi push
+
+Máy Windows không có gcc/qemu-user/WSL (không quyền admin) nên mọi thứ cần
+Linux thật giờ chạy trên **GitHub Actions** (workflow
+`.github/workflows/host-tests.yml`, commit `dc781c4`, run đầu tiên
+**12/12 job xanh** — xem tab Actions của repo):
+
+| Job | Nội dung |
+| --- | --- |
+| `unit test_*` (8 module matrix) | native (gcc+UBSan), native_usb (sh), bluez (dbus thật), transport, protocol, bridge, arrow (numpy+Pillow), hud_out |
+| `codec-cpp` | maneuver text test CarPlay qua `python -m ziglang c++` (Makefile tự dùng zig) |
+| `installer-busybox` | **cổng P0 của docs/emu-yeu-cau.md**: build BusyBox 1.19.2 từ source rồi chạy toàn bộ test_installer.py dưới PATH chỉ có applet xe |
+| `firmware` | compile pin arduino-core 3.3.2 + NimBLE 2.3.7, cả 2 cấu hình default + extended (có cache) |
+| `emu-smoke` | build host bridge của mzd-connect-emu — **repo đó đang PRIVATE**: job tự skip; muốn bật thì tạo secret **`EMU_TOKEN`** (PAT có scope repo) trong Settings → Secrets → Actions |
+
+Lưu ý cho agent: log job cần đăng nhập GitHub; chẩn đoán fail bằng cách xem
+tên job/step trong API
+`https://api.github.com/repos/dangkhoa116/mzd-vietnav-hud/actions/runs`
+(public). Hai bẫy đã sửa: (1) `SkipTest` ngay lúc import module làm loader
+ném exception thay vì skip → phải skip trong `setUpModule`/`setUpClass`;
+(2) tên bước workflow chứa dấu `:` làm hỏng YAML. mzd-connect-tpms cũng
+private — `test_hud_native_transport` skip sạch khi thiếu checkout
+(`VIETNAV_TEST_ARM_TOOLCHAIN`/`VIETNAV_TEST_LIBRARY` để bật tay).
+
+**Kết quả thực từ CI lần đầu**: firmware pin build được cả 2 bản; installer
+qua toàn bộ test dưới BusyBox đúng phiên bản xe; 8 module unit test xanh —
+tức là những gì máy Windows này không chạy được (C++ sanitizer, dbus, sh,
+BusyBox ARM-toolchain) đều đã được xác minh lại trên Linux.
+
 ## KẾT QUẢ THẬT: CarPlay + VietMap KHÔNG ra mũi tên (chủ xe đã test trên xe)
 
 Chủ xe đã cài `VIETNAV-HUD-0.9.1-USB` (có cả hai cầu CarPlay và AA) và test:
