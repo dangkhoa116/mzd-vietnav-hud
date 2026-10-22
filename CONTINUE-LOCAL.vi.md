@@ -4,7 +4,55 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
-## Bắt đầu từ đây
+## Cập nhật phiên 22-10-2026 (lần 3, tối): APP iOS ĐÃ KẾT NỐI EMULATOR — permission gate TRẢ LỜI: nhánh A
+
+Đọc [docs/hud-dart-layer-analysis.vi.md](docs/hud-dart-layer-analysis.vi.md)
+mục "ĐÃ CHỐT BẰNG FRIDA" để có bằng chứng đầy đủ. Tóm tắt trạng thái:
+
+- **Board ESP32-C3 (COM3) đang chạy bản NimBLE 2.5.1 extended** (build tay
+  `out/ext251-build`, KHÔNG phải source pin 2.3.7 của build.py — nimconfig
+  của thư viện đã bị patch EXT_ADV=1/instances=2; **đã reinstall 2.3.7** sau
+  đó nên bản rebuild lại từ source repo sẽ là 2.3.7 default). `CYCLE:1` đang
+  bật trong NVS — xoay 8 tên, pause khi có kết nối. Muốn tên cố định:
+  `CYCLE:0` rồi `NAME:<ten>` + reset. Capture serial đang chạy nền ghi
+  `out/cycle-trial-3.log` — **đang ghi phiên app đã kết nối!**
+- **iPhone 8 Plus jailbreak** (192.168.68.104, ios-mcp HTTP
+  `http://192.168.68.104:8090/mcp`; helper `work/tools/iosmcp.py` ngoài
+  repo, kèm session id trong `iosmcp_session.txt`): VIETMAP LIVE 3.4.3 đã
+  đăng nhập, đã bấm Đồng ý fallback OBD → GPS speed, **app đang streaming
+  tới board**: heartbeat CMD 0x02, frame thời tiết CMD 0x00 prefix `FE`
+  ("31° mây đen u ám"), CMD 0x01 8 byte ~1 Hz, OBD query CMD 0x0D.
+- **frida-server mobile** chạy trên phone cổng **27043** (bản extract từ
+  deb `re.frida.server` tại `/var/mobile/Library/Caches/frida-extract`,
+  chạy bằng `(setsid ./frida-server -l 0.0.0.0:27043 &)` qua run_command;
+  server root sẵn có nghe localhost:27042 không dùng được từ PC). PC đã cài
+  `frida` 17.24.3 (pip). Hook script `work/tools/vml_hud_hook.js` attach
+  theo PID + offset IMP; watcher `work/tools/vml_frida_watch.py` (cần sửa
+  attach theo PID lấy từ ios-mcp vì enumerate_processes as mobile rỗng).
+  Log `C:\work\mazda\work\frida-hud-watch.log`.
+- **Điểm dễ hỏng khi lặp lại trial listing**: danh sách chỉ nhận thiết bị
+  **mới** trong cửa sổ quét ~10 giây của màn scan; discover lại cùng MAC
+  chỉ REPLACE im lặng. Tên phải chứa "HUD" đúng lúc scan chạy (CYCLE đảm
+  bảo 4/8 tên qua cửa). Cách chắc nhất: để CYCLE bật, mở màn scan, nếu
+  không thấy → Thử lại → chờ vòng tên tiếp theo.
+- **Câu hỏi lớn đã đóng**: không có server gate — app streaming cho
+  SID không tồn tại (VMEMU0000001). **Nhánh A xác nhận khả thi.**
+
+### Việc tiếp theo ngay (thứ tự)
+
+1. **Bắt nav thật**: app → tìm điểm đến → Bắt đầu chỉ đường; đọc
+   `out/cycle-trial-3.log` dòng `[NAV]` để lấy frame CMD 0x00/0x40
+   variable2 thật (tên đường, direction, distance). Ghi bảng
+   direction↔mũi tên trên app (chụp màn hình từng bước rẽ).
+2. **Phân nhánh decoder cho frame FE** (info/thời tiết) để không giải
+   nhầm variable1; đối chiếu CMD 0x01 8 byte với SDK (W7/e).
+3. Đóng gói lại firmware pin 2.3.7 (có thể thêm hook FE-info), build
+   kit bằng build.py, và lấy capture làm fixture test.
+4. Sang giai đoạn CMU: daemon native ATT (thư mục `native/`) ăn theo
+   profile đã được app chấp nhận (MODEL:H50/PROTOCOL:2.2.2S qua FFF0);
+   rồi nối `com.jci.vbs.navi`.
+
+## Bắt đầu từ đây (bản cũ, phần lớn đã bị vượt qua)
 
 Mục tiêu: **VIETMAP LIVE trên điện thoại → giả HUD VietMap → dẫn đường và tên
 đường lên HUD zin Mazda CMU150**. Người dùng có **ESP32-C3 Mini/Super Mini**.
