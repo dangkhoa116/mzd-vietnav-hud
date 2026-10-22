@@ -4,7 +4,31 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
-## ĐƯỜNG TẮT CẦN THỬ TRƯỚC: VietMap qua CarPlay có thể đã lên HUD sẵn
+## KẾT QUẢ THẬT: CarPlay + VietMap KHÔNG ra mũi tên (chủ xe đã test trên xe)
+
+Chủ xe đã cài `VIETNAV-HUD-0.9.1-USB` (có cả hai cầu CarPlay và AA) và test:
+**Google Maps qua CarPlay lên HUD bình thường, VietMap thì không.** Phần "đường
+tắt" bên dưới vì vậy đã bị thực nghiệm bác — giữ lại để không thử lại lần nữa.
+
+Phân tích vì sao, và việc nên làm tiếp:
+[docs/carplay-vietmap-hud-gap.vi.md](docs/carplay-vietmap-hud-gap.vi.md). Tóm tắt:
+
+- VietMap iOS **thật sự có** chạy phiên dẫn đường CarPlay (`startNavigationSessionForTrip:`,
+  `setUpcomingManeuvers:`, `updateTravelEstimates:forManeuver:`, `setInstructionVariants:`,
+  `setSymbolImage:`). Không phải app thiếu API.
+- Nó **không** đặt `setManeuverType:`/`setJunctionType:`/`setJunctionExitAngle:` — nhưng
+  **đừng vội kết luận đó là nguyên nhân**: máy test là iOS **16.7.15**, mà
+  `CPManeuver.maneuverType` chỉ có từ iOS 17.4, nên Google Maps cũng không đặt được.
+- Việc duy nhất trả lời dứt điểm: **log trên xe** — với VietMap thì khung iAP2
+  `0x8059`/`0x8058` có tới `jciCARPLAY` không, và `maneuverType`/`maneuverDesc`
+  mang gì. Bản phát hành chỉ log lỗi nên phải **build bản debug** của
+  `libpatch-blmjcicarplay.so`; cần toolchain ARM, **máy Windows hiện tại không có**.
+- **Nên thử Android Auto trước**: bản Android của VietMap dựng `Trip` đầy đủ
+  (`Step` + `Maneuver` + `Lane`) và ánh xạ đúng hằng `Maneuver.TYPE_*`, còn nhánh
+  AA của mod ăn `NavigationState` sinh thẳng từ `Trip` đó. Đường ngắn và rõ hơn
+  CarPlay nhiều, không tốn dòng code nào.
+
+## ~~ĐƯỜNG TẮT CẦN THỬ TRƯỚC~~ (đã bị thực nghiệm bác, xem mục trên)
 
 Chủ xe xác nhận **dẫn đường Google Maps trên HUD đã chạy ổn**. Trên xe này
 đường đó là `repos/mazda-carplay-hud` (CarPlay → HUD). Kiểm lại hai đầu:
