@@ -37,7 +37,8 @@ kiểm thực tế, chưa thể coi đầu ra của nhánh VietMap BLE là hoàn
 | File | Vai trò | Trạng thái |
 | --- | --- | --- |
 | `bridge/vmlhud_frame.py` | Khung mới: hai checksum 4 byte; khung cũ: CRC16 Modbus | Đối chiếu codec Python/native và vector SDK; chưa có capture từ điện thoại thật |
-| `bridge/vmlhud_nav.py` | Ba layout dẫn đường, kể cả ảnh mũi tên variable2 | Giải mã tĩnh; cần xác nhận bảng direction và đơn vị tốc độ ngoài thực tế |
+| `bridge/vmlhud_nav.py` | Ba layout dẫn đường, kể cả ảnh mũi tên variable2 | Đã đối chiếu với app thật 22-10-2026: layout và byte giây đúng; `direction` luôn 0xFE nên vô dụng; đơn vị tốc độ vẫn cần mẫu khi xe chạy |
+| `bridge/vmlhud_arrow.py` | Nhận dạng ảnh mũi tên JPEG → `(maneuver, modifier)` bằng cách so với bộ asset của chính app | Mũi tên thật khớp 1.0000; hai icon không phải mũi tên bị loại đúng. Cần bộ APK/IPA của người dùng để tạo vân tay |
 | `emu/esp32-hud-emu/` | BLE peripheral FFF0 và FFFF trên ESP32-C3 | Board thật pass 22/22 qua BLE với PC làm central (22-10-2026); chưa thử với điện thoại/app thật |
 | `native/` | ATT server chạy trong tiến trình `bds`, chia sẻ UART với TPMS | Đã kiểm bằng transport giả, ARM và guest CMU; chưa xác minh advertising trên xe |
 | `native/usb/` | Kit thử native, thu log, phục hồi wrapper TPMS | Xem [hud-native-cmu.md](hud-native-cmu.md) và [kết quả emu](../native/emu/README.md) |

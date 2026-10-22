@@ -373,3 +373,45 @@ phia truoc" roi bi cat con 16 bit. `decode_log.py` va sketch C3 nay doc ca hai o
 
 Khong suy doan y nghia vao codec khi chua co bang chung; moi khung tren van
 duoc giu nguyen hex trong capture.
+
+## 10.8 Tu anh JPEG ve lai MA huong re (cho HUD zin Mazda)
+
+HUD zin Mazda **tu ve mui ten theo ma huong re**, no khong nhan anh bitmap. Ma
+`direction` tren song thi luon `0xFE`. Nen phai doi anh JPEG -> ma.
+
+Chia khoa: anh app gui chi la ban **ma hoa lai** cua mot asset co san trong
+chinh app (`lib/assets/hud/directions/{dark,light}/direction_*.png`, 90 ten x 2
+bo mau). So anh nhan duoc voi bo asset do bang tuong quan chuan hoa la ra dung
+ten asset. `bridge/vmlhud_arrow.py` lam viec nay:
+
+```sh
+python bridge/vmlhud_arrow.py --app duong/dan/vietmap.apk --log out/capture.log
+```
+
+Ket qua tren chinh capture that cua phien 22-10-2026:
+
+| Anh trong capture | score | margin | Ket luan |
+| --- | --- | --- | --- |
+| mui ten dang dan duong (2438 byte) | **1.0000** | 0.3506 | `end_of_road` / **`right`** |
+| icon thoi tiet (2004 byte) | 0.5659 | 0.0544 | bi loai - khong phai mui ten |
+| icon nhan roi (2230 byte) | 0.3833 | 0.0030 | bi loai - khong phai mui ten |
+
+`end_of_road/right` dung voi thuc dia: Duong So 7 **het duong** roi re phai vao
+Quoc Lo 13 - va khop mui ten tren man hinh app.
+
+Hai diem can nho khi dung:
+
+- **Nhieu ten asset co pixel giong het nhau** (vd `turn_right`, `on_ramp_right`,
+  `continue_right`, `notificaiton_right`). Khong the tach chung bang anh, va
+  cung khong can: chung cung mot **huong re**. Vi vay `margin` duoc do voi asset
+  dau tien co **modifier khac**, chu khong phai voi asset ke tiep; neu do kieu
+  kia thi moi mui ten that deu bi bao "yeu".
+- Nguong `confident`: `score >= 0.90` va `margin >= 0.01`. Hai icon khong phai
+  mui ten o tren deu roi duoi nguong, nen co the dung chinh nguong nay de biet
+  khung dang la dan duong hay chi la icon thong tin.
+
+Repo **khong chua** bo asset; nguoi dung tro `--app` toi ban APK/IPA cua minh,
+module tu cache van tay ra `out/arrow-fingerprints.json` (da bi git ignore).
+
+Con lai de len duoc HUD zin: anh xa `(maneuver, modifier)` -> ma mui ten cua
+`com.jci.vbs.navi`, va bom vao MQ do. Bang ma VBS chua duoc kiem trong repo nay.

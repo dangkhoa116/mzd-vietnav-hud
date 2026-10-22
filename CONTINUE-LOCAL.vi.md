@@ -72,6 +72,51 @@ getHUDInfo. Log: `out/protocol-222-trial.log`.
 được** — HUD Mazda có thể hiện mũi tên thật, không chỉ chữ. Rủi ro lớn nhất của
 phần dẫn đường coi như đã gỡ.
 
+### ĐÃ ĐỔI ĐƯỢC ẢNH MŨI TÊN → MÃ HƯỚNG RẼ (`bridge/vmlhud_arrow.py`)
+
+HUD zin Mazda tự vẽ mũi tên theo **mã hướng rẽ**, không nhận ảnh. Mà `direction`
+trên sóng luôn `0xFE`. Nút này đã gỡ xong:
+
+- Ảnh app gửi chỉ là bản **mã hoá lại** của một asset có sẵn trong chính app
+  (`lib/assets/hud/directions/…/direction_*.png`). So bằng tương quan chuẩn hoá
+  là ra đúng tên asset.
+- Trên capture thật: mũi tên dẫn đường khớp **1.0000** → `end_of_road` / `right`
+  — đúng thực địa (Đường Số 7 hết đường, rẽ phải vào QL13) và đúng màn hình app.
+  Hai icon không phải mũi tên (thời tiết, nhàn rỗi) bị loại đúng (0.57 và 0.38),
+  nên cùng ngưỡng đó dùng để biết khung đang là dẫn đường hay chỉ là icon.
+- Nhiều tên asset có pixel **giống hệt nhau** (`turn_right` = `on_ramp_right` =
+  `continue_right` …). Không tách được bằng ảnh và cũng không cần — chúng cùng
+  một hướng rẽ. Vì vậy `margin` đo với asset đầu tiên có **modifier khác**.
+- Repo **không chứa** bộ asset; trỏ `--app` tới APK/IPA của bạn, module tự cache
+  vân tay ra `out/arrow-fingerprints.json`.
+
+```sh
+python bridge/vmlhud_arrow.py --app duong/dan/vietmap.apk --log out/capture.log
+```
+
+### Còn lại bao nhiêu để lên được HUD zin Mazda
+
+Phần **điện thoại → HUD giả** coi như xong: quét, kết nối, HUDInfo, dẫn đường
+thật, tên đường, khoảng cách, thời gian, và mũi tên. Hai mảng lớn còn lại, cả
+hai đều **chưa chạy trên xe lần nào**:
+
+1. **Đưa profile đã được app chấp nhận sang radio của CMU.** `native/` đã có ATT
+   server, advertising, HUDInfo và bản vá ghép HCI vào `bds` của TPMS, kiểm bằng
+   transport giả + ARM/QEMU — nhưng **chưa xác minh advertising trên xe thật**,
+   và hiện mới phục vụ họ FFF0 với profile cũ (VIETNAV/protocol 2.0). Phải đổi
+   sang đúng cấu hình đã được app nhận: `MODEL:H50`, **`PROTOCOL:2.2.2`** (bỏ
+   chữ "S", nếu không sẽ mất mũi tên), `SID` bất kỳ. Rủi ro đã biết: controller
+   có cho chạy đồng thời TPMS central + HUD peripheral hay không vẫn chưa đọc
+   đủ bitmap Supported States.
+2. **Nối đầu ra vào `com.jci.vbs.navi`.** Đây là MQ mà HUD zin đọc, cũng là chỗ
+   cầu CarPlay đang bơm vào. Repo mới có **mã tham chiếu**, chưa tích hợp. Cần:
+   ánh xạ `(maneuver, modifier)` → mã mũi tên của VBS, bơm tên đường + khoảng
+   cách, chọn nguồn ưu tiên, và **xoá guidance** khi hết tuyến (tín hiệu là
+   `distance == 0xFFFFFFFF` + đuôi toàn 0, xem mục trên).
+
+Nói cách khác: chưa hiện trên HUD xe. Nhưng phần khó đoán nhất — app có chịu nói
+chuyện không, và lấy được những gì — thì đã có câu trả lời đầy đủ.
+
 ### Việc tiếp theo ngay (thứ tự mới)
 
 1. ~~Đổi PROTOCOL~~ — **ĐÃ CHẠY VÀ THÀNH CÔNG trong phiên này.** Xem mục dưới.
