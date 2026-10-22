@@ -231,7 +231,7 @@ index 0000000..b011b9b
 +
 +#endif  // VIETNAV_CARPLAY_MANEUVER_TEXT_H
 diff --git a/mazda/patches/blmjcicarplay/nav.cpp b/mazda/patches/blmjcicarplay/nav.cpp
-index 6b63846..23572e2 100644
+index 6b63846..a3f98cd 100644
 --- a/mazda/patches/blmjcicarplay/nav.cpp
 +++ b/mazda/patches/blmjcicarplay/nav.cpp
 @@ -52,6 +52,7 @@
@@ -269,7 +269,7 @@ index 6b63846..23572e2 100644
  // --- latched display state (persists between bursts; the 2Hz hud keep-alive resends it) ---
  uint32_t g_disp_event  = EV_STRAIGHT;
  uint32_t g_disp_side   = SIDE_NONE;
-@@ -330,8 +351,24 @@ extern "C" void nav_on_devmgr_msg(const void *msgp, long n)
+@@ -330,8 +351,32 @@ extern "C" void nav_on_devmgr_msg(const void *msgp, long n)
          }
  
          uint32_t mtype     = read_u32(b, n, kManeuverTypeOff);
@@ -289,13 +289,21 @@ index 6b63846..23572e2 100644
 +        const bool text_turn = (mtype == 0) && (idx != 0) &&
 +                               maneuver_text::classify(text, &tt);
 +
++        // [VIETNAV][DIAG] Trace EVERY maneuver before the filter. Without this a
++        // discarded one leaves no trace at all, so a car log cannot tell "the app
++        // sent nothing" from "the app sent type 0 and we dropped it" — which is
++        // the single question such a log exists to answer. LOGD, so the release
++        // build is unaffected.
++        LOGD("nav RAW idx=%u type=%u textturn=%d ev=%u side=%u desc=\"%s\"",
++             idx, mtype, (int)text_turn, tt.event, tt.side, text);
++
          // Skip idx0 (heading) and in-list context entries — buffer only displayable turns.
 -        if (idx == 0 || is_context_type(mtype)) return;
 +        if (idx == 0 || (is_context_type(mtype) && !text_turn)) return;
          if (g_buf_count >= kMaxBurst) return;
  
          uint32_t validInfo = read_u32(b, n, kValidInfoOff);
-@@ -340,10 +377,24 @@ extern "C" void nav_on_devmgr_msg(const void *msgp, long n)
+@@ -340,10 +385,24 @@ extern "C" void nav_on_devmgr_msg(const void *msgp, long n)
          int32_t  jAngle    = read_s16(b, n, kJunctionAngleOff);
          char     road[256];
          read_str(b, n, kRoadNameOff, road, sizeof(road));

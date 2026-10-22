@@ -219,6 +219,32 @@ Sau khi sửa: zig (release+debug) và m3-toolchain (release+debug) đều nạp
 Bài học rộng hơn: **kiểm ELF tĩnh không thay được một lần nạp thật.** Giờ đã có
 `qemu-arm`, luôn chạy bước nạp thử trước khi đưa .so cho chủ xe.
 
+### 3d. Bộ cài DEBUG để lấy log trên xe
+
+`installer/vietnav-collect.sh` (nút **THU THẬP**) đã có sẵn trong mọi bộ cài,
+kể cả 0.9.1 đang chạy trên xe. Thứ thiếu không phải công cụ thu thập mà là một
+`.so` chịu ghi: bản release bỏ `LOGD`/`LOGV` lúc biên dịch.
+
+`installer/build-debug-kit.py` dựng bộ cài debug từ một bộ đã phát hành, chỉ
+đổi `vietnav-payload/libpatch-blmjcicarplay.so`. Hai chỗ bắt buộc đúng, nếu
+không xe từ chối cài: `vietnav-install.sh` đối chiếu md5 **từng** file payload
+với `PAYLOAD-SOURCES.md`, và nó đọc bảng bằng `awk -F'|'` (cột 2 tên, cột 3
+md5). Phải chạy trong WSL: tên file trigger TouchTune dài 253 ký tự, vượt
+MAX_PATH nên Windows không giải nén nổi.
+
+**Đã sửa một lỗ hổng chí mạng của bản debug:** `nav.cpp` gốc `return` *trước*
+dòng `LOGD("nav MAN …")`, nên maneuver bị lọc không để lại dấu vết — log lấy về
+sẽ **không phân biệt được** "app không gửi gì" với "app có gửi type 0 và ta
+vứt", đúng câu duy nhất cần trả lời. Patch nay thêm dòng `nav RAW` **trước** bộ
+lọc. Là `LOGD` nên release không đổi (đã kiểm: chuỗi có trong debug, không có
+trong release).
+
+**Rủi ro phải nói rõ:** build bản *chưa vá* từ HEAD ra 27.271 B, còn .so trong
+0.9.1 là 30.699 B — lệch 3.428 B. `build-kit.py` ghi rõ 0.9.1 lấy .so từ
+*mazda-hud-toolkit (ilshyma build)*, không phải HEAD. Nên cài bản debug là thay
+một binary đang chạy tốt bằng binary dựng từ nguồn khác. **Phép thử đầu tiên
+trên xe phải là Google Maps có còn lên HUD không** — nhóm đối chứng.
+
 ### 4. Việc tiếp theo, theo thứ tự
 
 1. **Cài bản debug lên xe rồi chạy `installer/vietnav-collect.sh`.** Đây là việc duy nhất

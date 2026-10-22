@@ -53,6 +53,23 @@ Maps) giữ nguyên hành vi lọc context cũ, không đổi một chút nào.
 Hai `static_assert` khoá số hiệu `TURN_EVENT`/`SIDE_*` giữa header và `nav.cpp`,
 để sau này sửa một bên là hỏng build chứ không hỏng âm thầm.
 
+### Thêm một dòng log `nav RAW` — không có nó thì log trên xe vô dụng
+
+`nav.cpp` gốc `return` **trước** dòng `LOGD("nav MAN …")`, nên một maneuver bị
+bộ lọc loại sẽ **không để lại dấu vết nào**. Hệ quả: log lấy về từ xe trông y
+hệt nhau trong hai trường hợp hoàn toàn khác nhau — "app không gửi khung nào"
+và "app có gửi nhưng type 0 nên ta vứt". Mà đó đúng là câu hỏi duy nhất cần
+log để trả lời.
+
+Patch thêm một dòng **trước** bộ lọc, ghi mọi maneuver nhận được:
+
+```
+nav RAW idx=1 type=0 textturn=1 ev=4 side=2 desc="Rẽ phải vào Quốc Lộ 13"
+```
+
+Là `LOGD` nên **bản release không đổi một byte** (đã kiểm: chuỗi `nav RAW` có
+trong bản debug, không có trong bản release).
+
 ### Nguyên tắc: không đoán bừa
 
 `classify()` **trả về false khi không chắc**. Câu bám đường ("Đi tiếp trên Quốc
@@ -251,6 +268,14 @@ Việc đó vẫn phải có log trên xe. Ghi chú thêm: `NaviSupported` trong
 - **Bản .so ARM chưa từng chạy trên xe.** Nay đã nạp được dưới đúng loader
   glibc 2.11 của xe qua `qemu-arm` (xem mục dưới), nhưng đó mới là "nạp và
   chạy constructor", không phải chạy thật trong `jciCARPLAY`.
+- **.so đang chạy trên xe KHÔNG cùng nguồn với bản ta build.** Build bản
+  *chưa vá* từ `mazda-carplay-hud` HEAD bằng m3-toolchain ra **27.271 B**,
+  trong khi file trong `VIETNAV-HUD-0.9.1-USB.zip` là **30.699 B** — lệch
+  3.428 B. Đúng như `build-kit.py` ghi: bản 0.9.1 lấy .so từ *mazda-hud-toolkit
+  (ilshyma build, km/h fix + VN fold)*, không phải từ HEAD. Nghĩa là cài bản
+  debug của ta **là thay một binary đang chạy tốt bằng một binary dựng từ
+  nguồn khác**. Vì vậy phép thử đầu tiên trên xe phải là **Google Maps vẫn
+  lên HUD hay không** — đó là nhóm đối chứng.
 - Bản debug thì nay **đã build được** (trước đây bế tắc vì thiếu toolchain).
   Việc còn lại là cài nó rồi chạy `vietnav-collect.sh` để lấy dòng
   `nav PICK` / `nav TEXT-FALLBACK` trên xe.
