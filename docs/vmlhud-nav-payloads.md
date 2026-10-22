@@ -258,11 +258,46 @@ Hai moc tinh giup doc ket qua nay (disassembly `vietmap_hud_sdk.framework`):
   voi `w3=0x40` tai 0x4e14). Nhanh khac bang se `setLastNavigationImageData:` roi
   goi `sendNavigationInformationWithDirection:` = CMD 0x00.
 
-Hệ quả thực tế: **doi `MODEL`/`PROTOCOL`/`HW`/`FW` trong dap getHUDInfo se KHONG
-lam iOS chuyen sang CMD 0x40.** Viec chon entry point (`sendCustomNavigation…`
-co anh mui ten, hay `sendNavigation…` khong anh) nam **tren** SDK, o lop Dart,
-truoc khi bat ky truong nao cua HUDInfo duoc doc. Emulator khong co don bay nao
-o day - muon co mui ten phai tac dong vao lop Dart hoac chap nhan HUD chi co chu.
+### 10.3.1 Cay quyet dinh thuc su: `hudInfo.protocol` CHON duong di
+
+Doc tiep dau `insedeSendCustomNavigation…` (0x4c20-0x4d70) cho thay toan bo lua
+chon **chi phu thuoc chuoi `PROTOCOL` ma CHINH EMULATOR tra ve** trong getHUDInfo:
+
+```
+hudInfo == nil                                   -> nhanh so anh (0x4c90)
+hudInfo.protocol compare:@"2.2.2" < 0            -> sendNavigationInformation (CMD 0x00, BO anh)
+hudInfo.protocol containsString:@"S"             -> sendNavigationInformation (CMD 0x00, BO anh)
+nguoc lai                                        -> so anh voi lastNavigationImageData
+                                                    bang  -> CMD 0x40 (Simplify)
+                                                    khac -> luu anh, roi CMD 0x00
+```
+
+Emulator dang tra **`PROTOCOL:2.2.2S`** - co chu "S" - nen bi **ep** vao nhanh bo
+anh. Day la nguyen nhan truc tiep cua viec khong bao gio thay CMD 0x40, **khong**
+phai vi lop Dart khong gui anh.
+
+### 10.3.2 Frida xac nhan: Dart CO gui anh mui ten, moi giay
+
+Hook hai entry point tren thiet bi that (frida, `vietmap_hud_sdk` base
+0x107968000) trong luc dan duong:
+
+```
+[custom] sendCustomNavigationInformation dir=-2 imageLen=744 dist=150 next="Quốc Lộ 13" cur=""
+[plain]  sendNavigationInformation       dir=-2 dist=150 next="Quốc Lộ 13" cur="" remainTime=185 remainDist=1225
+```
+
+- Lop Dart goi **ban co anh**, keme mot **PNG 744 byte** (`89 50 4E 47 …`) moi giay.
+- `dir=-2` = `0xFE`: **chinh lop Dart chon 254**, SDK chi chuyen tiep nguyen ven.
+- Checksum anh **bat bien** qua 8 lan goi lien tiep (chi con tro NSData doi), nen
+  neu vao duoc nhanh so sanh thi tu khung thu hai tro di se **bang** va app se
+  gui CMD 0x40.
+- `setLastNavigationImageData:`/`lastNavigationImageData` **khong he duoc goi** -
+  dung nhu du doan: nhanh "S" cat truoc khi toi do.
+
+**Hệ quả cho buoc tiep theo**: thu doi dap getHUDInfo sang `PROTOCOL:2.2.2`
+(bo chu "S") roi ket noi lai. Neu doc dung thi app se gui CMD 0x40 kem anh mui
+ten PNG - tuc la HUD Mazda co the co mui ten that, khong chi co chu. Chua chay
+duoc thi nghiem nay: cong COM3 dang bi tien trinh capture cua phien truoc giu.
 
 ### 10.4 Khung "het dan duong" = khung nhan roi
 

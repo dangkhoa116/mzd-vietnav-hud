@@ -36,27 +36,40 @@ Bốn kết quả chốt được:
   34464 = 100000 mod 65536, tức lớp trên gửi "100 km = không có camera" rồi bị
   cắt còn 16 bit. `decode_log.py` và sketch C3 đã đọc cả hai ô; số khung chưa
   giải mã trong capture rơi từ 2.833 xuống 18.
-- **Không có đòn bẩy nào từ phía emulator để ép CMD 0x40**: CMD 0x40 chỉ phát ra
-  từ một chỗ duy nhất trong SDK, nhánh mà `directionImage` mới trùng
-  `lastNavigationImageData`. Việc chọn entry point (có ảnh mũi tên hay không)
-  nằm **trên** SDK, ở lớp Dart, trước khi bất kỳ trường HUDInfo nào được đọc.
-  **Đừng mất thời gian đổi MODEL/PROTOCOL/HW/FW để săn CMD 0x40.**
+- **ĐÃ TÌM RA ĐÒN BẨY ÉP CMD 0x40 — và chính emulator đang tự chặn mình.**
+  Đầu `insedeSendCustomNavigation…` (0x4c20–0x4d70) rẽ nhánh **chỉ** theo chuỗi
+  `PROTOCOL` mà emulator trả về trong getHUDInfo:
+  `protocol < "2.2.2"` **hoặc** `protocol` chứa chữ **"S"** → đi nhánh bỏ ảnh
+  (CMD 0x00); ngược lại mới so ảnh với `lastNavigationImageData` và gửi **CMD 0x40**
+  khi trùng. Emulator đang trả `PROTOCOL:2.2.2S` → **có "S" → bị ép bỏ ảnh**.
+- **Frida xác nhận lớp Dart CÓ gửi ảnh mũi tên**: mỗi giây một **PNG 744 byte**
+  qua `sendCustomNavigationInformation…`, và `dir=-2` (=0xFE) là do chính Dart
+  chọn. Checksum ảnh **bất biến** qua 8 lần gọi liên tiếp, nên nếu vào được nhánh
+  so sánh thì từ khung thứ hai trở đi sẽ trùng và app sẽ gửi CMD 0x40.
+  `setLastNavigationImageData:` chưa bao giờ được gọi — đúng như suy luận.
 - **0xFF mới là sentinel "hết dẫn đường" của SDK** (`sendEndNavigationInformation`
   gửi direction 0xFF + toàn 0, và SDK so direction với 0xFF để tắt NaviTimer).
   App không hề gọi hàm đó; `0xFE` là giá trị lớp Dart tự chọn.
 
 ### Việc tiếp theo ngay (thứ tự mới)
 
-1. **Lấy mẫu khi xe chạy thật**: đứng yên thì `speed` luôn 0 và `current_road`
+1. **THÍ NGHIỆM ƯU TIÊN SỐ 1 — đổi `PROTOCOL:2.2.2S` thành `PROTOCOL:2.2.2`**
+   (bỏ chữ "S") rồi kết nối lại app và xem có CMD 0x40 kèm ảnh PNG mũi tên không.
+   Chưa chạy được trong phiên này vì **COM3 đang bị tiến trình capture của phiên
+   trước giữ** (một `python.exe`). Cách làm: dừng capture đó, mở COM3, gửi
+   `PROTOCOL:2.2.2` (rồi `RESET` nếu cần), chạy lại `capture_serial.py` ra file
+   mới, và trong app ngắt/kết nối lại HUD để nó đọc getHUDInfo mới.
+   Nếu thành công thì HUD Mazda có mũi tên thật chứ không chỉ có chữ; nếu thất
+   bại thì trả lại `PROTOCOL:2.2.2S`.
+2. **Lấy mẫu khi xe chạy thật**: đứng yên thì `speed` luôn 0 và `current_road`
    luôn rỗng. Mang board + điện thoại lên xe, chạy một tuyến ngắn có rẽ, xem
-   `direction` có rời 0xFE không và hai trường kia được điền ra sao. Đây là thí
-   nghiệm duy nhất còn có thể đổi kết luận về mũi tên.
-2. **Nếu `direction` vẫn là 0xFE khi chạy**: chốt rằng HUD chỉ nhận được chữ, rồi
+   `direction` có rời 0xFE không và hai trường kia được điền ra sao.
+3. **Nếu `direction` vẫn là 0xFE khi chạy**: chốt rằng HUD chỉ nhận được chữ, rồi
    quyết định — suy mũi tên từ văn bản/khoảng cách phía CMU, hoặc đào lớp Dart
    (Flutter AOT) để tìm chỗ gọi `sendCustomNavigationInformation…`.
-3. **CMD 0x09** (5 byte `00`, một lần lúc mở phiên) vẫn chưa rõ; 18 khung lẻ còn
+4. **CMD 0x09** (5 byte `00`, một lần lúc mở phiên) vẫn chưa rõ; 18 khung lẻ còn
    lại trong capture phần lớn là nhiễu serial lúc bắt tay.
-4. Sang giai đoạn CMU: daemon native ATT (`native/`) ăn theo profile đã được app
+5. Sang giai đoạn CMU: daemon native ATT (`native/`) ăn theo profile đã được app
    chấp nhận (MODEL:H50/PROTOCOL:2.2.2S qua FFF0); rồi nối `com.jci.vbs.navi`.
 
 Lưu ý thiết bị: helper `work/tools/iosmcp.py` nói chuyện thẳng với ios-mcp trên
@@ -108,7 +121,7 @@ mục "ĐÃ CHỐT BẰNG FRIDA" để có bằng chứng đầy đủ. Tóm t�
    nhầm variable1; đối chiếu CMD 0x01 8 byte với SDK (W7/e).
 3. Đóng gói lại firmware pin 2.3.7 (có thể thêm hook FE-info), build
    kit bằng build.py, và lấy capture làm fixture test.
-4. Sang giai đoạn CMU: daemon native ATT (thư mục `native/`) ăn theo
+5. Sang giai đoạn CMU: daemon native ATT (thư mục `native/`) ăn theo
    profile đã được app chấp nhận (MODEL:H50/PROTOCOL:2.2.2S qua FFF0);
    rồi nối `com.jci.vbs.navi`.
 
