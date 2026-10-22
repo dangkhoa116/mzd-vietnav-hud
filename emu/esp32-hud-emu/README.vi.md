@@ -112,7 +112,28 @@ FW:1.0.0
 PROTOCOL:2.2.2S
 SID:VMEMU0000001
 NAME:VMHUD-EMU
+ADV:BOTH
+MFG:<hex>
+CYCLE:1
 ```
+
+### CYCLE: xoay vòng tên để dò bộ lọc tên của app
+
+Phân tích tĩnh (xem `docs/hud-dart-layer-analysis.vi.md`) cho thấy tầng SDK
+iOS chấp nhận mọi tên chứa `HUD`, nên nghi vấn còn lại là tầng Dart lọc tên
+chặt hơn. `CYCLE:1` cho board **tự đổi tên mỗi 5 giây** theo danh sách
+`VIETMAP-HUD, vmHUD, VIETMAP_HUD, HUD_V3, H50, H1AS, H1X, H1N` (lưu NVS, áp
+dụng cả sau RESET; `CYCLE:0` trả về tên gốc). Danh sách cố định trong
+firmware, cố tình gồm cả tên không chứa `HUD` mà lệnh `NAME:` từ chối. Xoay
+tạm dừng khi có điện thoại đang kết nối.
+
+Cách thử: gửi `CYCLE:1`, mở màn **Cài đặt → HUD → Kết nối thiết bị** của
+VIETMAP LIVE, giữ nguyên màn hình **ít nhất 1 phút** (8 tên × 5 giây = 40
+giây một vòng). Nếu một tên được Dart chấp nhận, nó sẽ hiện trong danh sách;
+đọc log serial dòng `[CYCLE] i/8 name=...` để biết tên đang active lúc đó.
+Nếu không tên nào hiện sau ≥2 vòng trên cả iPhone và tablet Android thì bộ
+lọc tên không phải nguyên nhân (hoặc app không quét) — chuyển sang bắt
+log/runtime trên máy jailbreak.
 
 Cấu hình lưu vào NVS và giữ qua RESET/mất điện. `NAME` áp dụng sau RESET,
 những trường khác dùng trong đáp HUDInfo tiếp theo; ngắt/kết nối lại app để

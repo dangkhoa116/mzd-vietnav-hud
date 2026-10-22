@@ -13,6 +13,18 @@ String g_protocol="2.2.2S", g_sid="VMEMU0000001";
 // A real HUD belongs to one device family and may carry manufacturer data.
 // Both are configurable so a phone-side filter can be probed without reflashing.
 String g_adv="BOTH", g_mfg="";
+// Name-cycling probe: the SDK native layer accepts any name containing "HUD",
+// but the app's Dart layer may filter harder. Rotating candidate names during
+// one scan trial tests them all without reflashing. Candidates deliberately
+// include names without "HUD" (H50, H1AS, ...) that the serial NAME: command
+// rejects, because only the app's acceptance is unknown.
+bool g_cycle=false;
+uint8_t g_cycleIndex=0;
+uint32_t g_cycleLast=0;
+String g_baseName;
+const char *const kCycleNames[]={"VIETMAP-HUD","vmHUD","VIETMAP_HUD","HUD_V3","H50","H1AS","H1X","H1N"};
+const size_t kCycleCount=sizeof(kCycleNames)/sizeof(kCycleNames[0]);
+const uint32_t kCycleMs=5000;
 Preferences g_store;
 std::mutex g_cfgMutex;
 std::atomic<bool> g_connected{false};
@@ -146,32 +158,45 @@ template <typename Advertisement> void fillAdvertisement(Advertisement &data) {
   data.setName(std::string(g_name.c_str()));
   if (g_mfg.length()>=2) data.setManufacturerData(manufacturerBytes());
 }
-void setupAdvertising() {
+// Rebuild the advertisement payloads from the current g_name/g_adv/g_mfg.
+// Used at boot and by the name-cycling probe; safe to call while disconnected.
+void applyAdvertising(bool extended) {
   auto *adv=NimBLEDevice::getAdvertising();
+  NimBLEDevice::setDeviceName(std::string(g_name.c_str()));
 #if CONFIG_BT_NIMBLE_EXT_ADV
-  adv->setCallbacks(new AdvCB());
+  adv->stop(0);adv->stop(1);
+  if (extended) adv->setCallbacks(new AdvCB());
   NimBLEExtAdvertisement primary;
   primary.setLegacyAdvertising(true);primary.setConnectable(true);primary.setScannable(true);
   primary.setFlags(0x06);
   fillAdvertisement(primary);
   if (!adv->setInstanceData(0,primary)) Serial.println("[ADV] primary configuration FAILED");
   startConnectable();
-  NimBLEExtAdvertisement diagnostic;
-  diagnostic.setLegacyAdvertising(false);diagnostic.setConnectable(false);diagnostic.setScannable(true);
-  diagnostic.enableScanRequestCallback(true);diagnostic.setName(std::string(g_name.c_str()));
-  if (!adv->setInstanceData(1,diagnostic) || !adv->start(1)) Serial.println("[ADV] optional scan diagnostic FAILED");
-  Serial.println("[ADV] optional extended scan diagnostic enabled; absence of SCAN proves nothing about VietMap");
+  if (extended) {
+    NimBLEExtAdvertisement diagnostic;
+    diagnostic.setLegacyAdvertising(false);diagnostic.setConnectable(false);diagnostic.setScannable(true);
+    diagnostic.enableScanRequestCallback(true);diagnostic.setName(std::string(g_name.c_str()));
+    if (!adv->setInstanceData(1,diagnostic) || !adv->start(1)) Serial.println("[ADV] optional scan diagnostic FAILED");
+  }
 #else
+  (void)adv;
+  (void)extended;
   NimBLEAdvertisementData primary;
   primary.setFlags(0x06);
   fillAdvertisement(primary);
-  adv->enableScanResponse(false);
-  if (!adv->setAdvertisementData(primary))
+  NimBLEDevice::getAdvertising()->enableScanResponse(false);
+  if (!NimBLEDevice::getAdvertising()->setAdvertisementData(primary))
     Serial.println("[ADV] primary configuration FAILED; payload may exceed 31 bytes");
   startConnectable();
 #endif
-  Serial.printf("[BLE] advertising name=%s services=%s mfg=%s\n",
+  Serial.printf("[ADV] advertising name=%s services=%s mfg=%s\n",
                 g_name.c_str(),g_adv.c_str(),g_mfg.length()?g_mfg.c_str():"(none)");
+}
+void setupAdvertising() {
+  applyAdvertising(true);
+#if !CONFIG_BT_NIMBLE_EXT_ADV
+  Serial.println("[ADV] extended scan diagnostic not compiled in this build");
+#endif
 }
 void handleSerial() {
   static String line;
@@ -188,13 +213,34 @@ void handleSerial() {
     line.trim();
     if (line=="STATUS") {
       std::lock_guard<std::mutex> guard(g_cfgMutex);
-      Serial.printf("[CFG] name=%s model=%s hw=%s fw=%s protocol=%s sid=%s adv=%s mfg=%s connected=%d\n",
+      Serial.printf("[CFG] name=%s model=%s hw=%s fw=%s protocol=%s sid=%s adv=%s mfg=%s cycle=%d(%u/%u) connected=%d\n",
                     g_name.c_str(),g_model.c_str(),g_hw.c_str(),g_fw.c_str(),g_protocol.c_str(),g_sid.c_str(),
-                    g_adv.c_str(),g_mfg.length()?g_mfg.c_str():"-",g_connected.load());
+                    g_adv.c_str(),g_mfg.length()?g_mfg.c_str():"-",g_cycle,(unsigned)g_cycleIndex+1,(unsigned)kCycleCount,
+                    g_connected.load());
     } else if (line=="PING") {
       const uint8_t known[]={0xa5,0x5a,0x37,0xc3,0,0,0,0x0e,0,0,0,0,0x0e,0,0x4d,0xc6,0x42,0x15,0xc1,0xc4,0x8d,0xa3};
       vmhud::Frame parsed;
       Serial.printf("[PING] frozen SDK-format vector: %s\n",vmhud::parse(known,sizeof(known),sdkChecksum,parsed)?"OK":"FAIL");
+    } else if (line=="CYCLE" || line.startsWith("CYCLE:")) {
+      const String value=line.length()>6?line.substring(6):"";
+      const bool on=value=="1"||value=="on"||value=="true"||value=="ON"||value=="TRUE";
+      const bool off=value=="0"||value=="off"||value=="false"||value=="OFF"||value=="FALSE";
+      if (line=="CYCLE" || (!on && !off)) {
+        Serial.printf("[CFG] CYCLE:1|0 rotates %u names every %ums: ",(unsigned)kCycleCount,(unsigned)kCycleMs);
+        for (size_t i=0;i<kCycleCount;i++) Serial.printf("%s%s",i?", ":"",kCycleNames[i]);
+        Serial.println();
+      } else {
+        g_cycle=on;
+        if (!g_store.putBool("cycle",on)) Serial.println("[CFG] NVS write FAILED");
+        if (!on && g_baseName.length()) {
+          std::lock_guard<std::mutex> guard(g_cfgMutex);
+          g_name=g_baseName;g_cycleIndex=0;applyAdvertising(true);
+          Serial.printf("[CFG] cycle off; restored base name %s\n",g_name.c_str());
+        } else {
+          g_cycleLast=millis();
+          Serial.printf("[CFG] cycle=%d; rotation runs while disconnected, pause while connected\n",g_cycle);
+        }
+      }
     } else {
       const int split=line.indexOf(':');
       const String key=split<0?"":line.substring(0,split),value=split<0?"":line.substring(split+1);
@@ -237,7 +283,11 @@ void setup() {
     g_hw=g_store.getString("hw",g_hw);g_fw=g_store.getString("fw",g_fw);
     g_protocol=g_store.getString("protocol",g_protocol);g_sid=g_store.getString("sid",g_sid);
     g_adv=g_store.getString("adv",g_adv);g_mfg=g_store.getString("mfg",g_mfg);
+    g_cycle=g_store.getBool("cycle",false);
   }
+  g_baseName=g_name;
+  if (g_cycle) { g_name=kCycleNames[0];g_cycleIndex=0; }  // start the trial from the most likely name
+  g_cycleLast=millis();
   NimBLEDevice::init(std::string(g_name.c_str()));
   NimBLEServer *server=NimBLEDevice::createServer();server->setCallbacks(new ServerCB());
   NimBLEService *h1=server->createService("FFF0");
@@ -253,6 +303,22 @@ void setup() {
   g_h50->setCallbacks(new SubscribeCB());
   h50->createCharacteristic("9ABC",writable)->setCallbacks(new WriteCB(g_h50,"9ABC",&g_rxH50));
   h50->start();setupAdvertising();
-  Serial.println("[EMU] Serial 115200: STATUS, PING, MODEL:x, PROTOCOL:x, SID:x, NAME:x, ADV:x, MFG:x");
+  Serial.println("[EMU] Serial 115200: STATUS, PING, MODEL:x, PROTOCOL:x, SID:x, NAME:x, ADV:x, MFG:x, CYCLE:1|0");
 }
-void loop() { handleSerial();delay(10); }
+void loop() {
+  handleSerial();
+  // Rotate candidate names only while no phone is connected, so an in-progress
+  // connection attempt never sees the advertisement change underneath it.
+  if (g_cycle && !g_connected && millis()-g_cycleLast>=kCycleMs) {
+    g_cycleLast=millis();
+    g_cycleIndex=(g_cycleIndex+1)%kCycleCount;
+    {
+      std::lock_guard<std::mutex> guard(g_cfgMutex);
+      g_name=kCycleNames[g_cycleIndex];
+      applyAdvertising(false);
+    }
+    Serial.printf("[CYCLE] %u/%u name=%s active %ums\n",(unsigned)g_cycleIndex+1,(unsigned)kCycleCount,
+                  kCycleNames[g_cycleIndex],(unsigned)kCycleMs);
+  }
+  delay(10);
+}
