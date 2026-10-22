@@ -4,6 +4,7 @@
 *.so
 *.a
 road_fold_test
+maneuver_text_test
 build/
 out/
 

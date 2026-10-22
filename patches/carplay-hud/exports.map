@@ -1,0 +1,24 @@
+/* Export exactly the five C symbols the LD_PRELOAD shim must interpose in
+ * jciCARPLAY, and hide everything else.
+ *
+ * This matters more here than in a normal shared library. The shim is loaded
+ * via LD_PRELOAD, so it sits at the front of the process-wide symbol lookup
+ * order: any symbol it exports with default visibility silently interposes
+ * that symbol for jciCARPLAY and every library the process loads.
+ *
+ * Linking libc++ statically (what the zig cross-build does, since there is no
+ * device sysroot to borrow libstdc++ from) drags in `operator new` /
+ * `operator delete` and `__cxa_end_cleanup` as global symbols. Without this
+ * script the shim would hijack allocation for the whole OEM process. The
+ * on-car reference build does not export them, and neither may we.
+ */
+{
+  global:
+    msgrcv;
+    eDevMgrRegisterProcess;
+    eDevMgriPodStartCallStateUpdates;
+    eDevMgriPodStartCommunicationUpdates;
+    eDevMgriPodSendLocationInformation;
+  local:
+    *;
+};

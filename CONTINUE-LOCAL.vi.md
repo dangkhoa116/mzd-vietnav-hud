@@ -16,13 +16,17 @@ Phân tích vì sao, và việc nên làm tiếp:
 - VietMap iOS **thật sự có** chạy phiên dẫn đường CarPlay (`startNavigationSessionForTrip:`,
   `setUpcomingManeuvers:`, `updateTravelEstimates:forManeuver:`, `setInstructionVariants:`,
   `setSymbolImage:`). Không phải app thiếu API.
-- Nó **không** đặt `setManeuverType:`/`setJunctionType:`/`setJunctionExitAngle:` — nhưng
-  **đừng vội kết luận đó là nguyên nhân**: máy test là iOS **16.7.15**, mà
-  `CPManeuver.maneuverType` chỉ có từ iOS 17.4, nên Google Maps cũng không đặt được.
+- Nó **không** đặt `setManeuverType:`/`setJunctionType:`/`setJunctionExitAngle:`.
+  Máy test trên xe là **iPhone Air / iOS 27.0.1**, mà `CPManeuver.maneuverType`
+  có từ iOS 17.4 ⇒ API chắc chắn có sẵn, app chỉ đơn giản là không gọi. (Máy
+  iOS 16.7.15 chỉ dùng nghiên cứu BLE, không liên quan phép thử trên xe.)
+- Đã có bản vá theo giả thuyết đó: [`patches/carplay-hud/`](patches/carplay-hud/README.md)
+  suy hướng rẽ từ chuỗi lệnh khi `maneuverType == 0`. 43 kiểm tra host PASS.
 - Việc duy nhất trả lời dứt điểm: **log trên xe** — với VietMap thì khung iAP2
   `0x8059`/`0x8058` có tới `jciCARPLAY` không, và `maneuverType`/`maneuverDesc`
-  mang gì. Bản phát hành chỉ log lỗi nên phải **build bản debug** của
-  `libpatch-blmjcicarplay.so`; cần toolchain ARM, **máy Windows hiện tại không có**.
+  mang gì. Bản phát hành chỉ log lỗi nên cần bản debug; **bản debug ARM nay đã
+  build được** bằng zig (`patches/carplay-hud/build_arm_zig.py`), không cần
+  `m3-toolchain` nữa. Còn lại là cài lên xe rồi chạy `vietnav-collect.sh`.
 - **Nên thử Android Auto trước**: bản Android của VietMap dựng `Trip` đầy đủ
   (`Step` + `Maneuver` + `Lane`) và ánh xạ đúng hằng `Maneuver.TYPE_*`, còn nhánh
   AA của mod ăn `NavigationState` sinh thẳng từ `Trip` đó. Đường ngắn và rõ hơn

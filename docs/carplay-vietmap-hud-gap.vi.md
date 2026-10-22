@@ -89,10 +89,23 @@ Câu hỏi duy nhất còn lại là: **với VietMap, khung `0x8059`/`0x8058` c
   được, thay vì để `is_context_type()` nuốt mất.
 - Có khung và `maneuverType` hợp lệ → lỗi nằm ở khâu chọn/đẩy, cũng sửa được.
 
-Trở ngại: bản phát hành chỉ log lỗi (`log.h`: release ⇒ ERROR, `LOGD`/`LOGV` bị
-bỏ). Muốn có dòng `nav PICK …` phải **build bản debug** của
-`libpatch-blmjcicarplay.so` rồi chạy `vietnav-collect.sh`. Build cần toolchain
-ARM (`m3-toolchain`) — **không có trên máy Windows đang dùng** (không cả `gcc`).
+Trở ngại cũ: bản phát hành chỉ log lỗi (`log.h`: release ⇒ ERROR, `LOGD`/`LOGV`
+bị bỏ). Muốn có dòng `nav PICK …` phải **build bản debug** của
+`libpatch-blmjcicarplay.so`, mà build cần toolchain ARM `m3-toolchain` — binary
+ELF Linux, không chạy được trên máy Windows này (không WSL, không container).
+
+**Trở ngại đó đã gỡ.** `patches/carplay-hud/build_arm_zig.py` cross-build cùng
+bộ nguồn bằng zig và tự kiểm lại ELF so với chính file .so đang chạy trên xe:
+soft-float base AAPCS (không `TAG_ABI_VFP_ARGS`), chỉ cần `GLIBC_2.4` (CMU có
+2.11), xuất đúng 5 symbol interpose. Cả hai bản đã có:
+
+- `out/carplay-arm/release/libpatch-blmjcicarplay.so` — 197.336 B
+- `out/carplay-arm/debug/libpatch-blmjcicarplay.so` — 3.365.148 B, có sẵn chuỗi
+  `nav PICK` và `nav TEXT-FALLBACK`
+
+Việc còn lại là **cài bản debug lên xe rồi chạy `vietnav-collect.sh`**. Lưu ý
+chưa có .so nào trong hai bản này từng chạy trên xe — đúng ABI không có nghĩa là
+đúng hành vi.
 
 ## 4. Đường rẻ hơn nên thử trước: Android Auto
 

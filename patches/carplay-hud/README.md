@@ -68,16 +68,93 @@ rẽ phải; "rẽ phải **gấp**" là rẽ gấp chứ không phải rẽ th�
 cd <checkout mazda-carplay-hud>
 git apply --stat  .../patches/carplay-hud/0001-nav-recover-turn-from-instruction-text.patch   # xem trước
 git apply         .../patches/carplay-hud/0001-nav-recover-turn-from-instruction-text.patch
-# rồi build theo hướng dẫn của upstream (cần toolchain ARM m3-toolchain)
 ```
 
 Patch tạo luôn `mazda/patches/blmjcicarplay/maneuver_text.h`, không phải copy tay.
+
+## Build bản ARM cho xe (không cần m3-toolchain)
+
+`mazda/Makefile` của upstream build bằng submodule `m3-toolchain`
+(`arm-cortexa9_neon-linux-gnueabi-g++`). Đó là **binary ELF Linux x86_64**, nên
+trên máy Windows không WSL / không container thì chạy không nổi — đúng chỗ bế
+tắc khiến chưa ra được **bản debug** để đọc log trên xe.
+
+`build_arm_zig.py` build cùng bộ nguồn đó bằng zig (một exe Windows, cross-compile
+thẳng sang `arm-linux-gnueabi`), rồi **tự kiểm lại** sản phẩm:
+
+```sh
+python -m pip install ziglang pyelftools
+python patches/carplay-hud/build_arm_zig.py \
+    --carplay ../mazda-carplay-hud \
+    --baseline <libpatch-blmjcicarplay.so đang chạy trên xe>
+```
+
+Kết quả (zig 0.16.0, target `arm-linux-gnueabi.2.4.0`, `-mcpu=cortex_a9+neon`):
+
+| Bản | Kích thước | Log |
+| --- | --- | --- |
+| release | 197.336 B | chỉ ERROR (như upstream) |
+| debug | 3.365.148 B | có `nav PICK`, `nav TEXT-FALLBACK` |
+
+Đã kiểm trong chuỗi byte của file: bản debug **có** `nav PICK` và
+`TEXT-FALLBACK`, bản release **không** — đúng thiết kế `log.h` của upstream.
+
+### Những gì script tự kiểm (và vì sao)
+
+Không chỉ "biên dịch xong là xong" — nó so với **chính file .so đang chạy trên
+xe** làm chuẩn:
+
+- **EABI5, không `EF_ARM_ABI_FLOAT_HARD`**, và `.ARM.attributes` **không** có
+  `TAG_ABI_VFP_ARGS`. Cả hai file đều vậy ⇒ cùng base AAPCS (soft-float). Sai
+  chỗ này thì .so vẫn **nạp được** nhưng gọi hàm OEM sai thầm lặng — tệ hơn là
+  lỗi nạp. `TAG_ABI_PCS_WCHAR_T=4`, `TAG_ABI_ENUM_SIZE=2`,
+  `TAG_ABI_ALIGN_NEEDED=1`, `TAG_CPU_ARCH=10` (ARMv7-A) đều khớp y file trên xe.
+- **Chỉ cần `GLIBC_2.4`**, trong khi CMU có glibc 2.11 (`native/build_arm.py`
+  chốt cùng mốc này từ sysroot `libc-2.11.so`). Thừa chỗ thoải mái.
+- **Xuất đúng 5 symbol** `msgrcv` + 4 `eDevMgr*`, không hơn. Xem
+  [`exports.map`](exports.map): link tĩnh libc++ lôi theo `operator new` /
+  `operator delete` thành symbol global, mà .so này nạp bằng `LD_PRELOAD` nên
+  nằm đầu bảng tra symbol của cả tiến trình — để lọt thì nó **chiếm quyền cấp
+  phát bộ nhớ của cả `jciCARPLAY`**. Version script chặn lại.
+- Flag ELF lệch đúng `0x202` so với file trên xe (`EF_ARM_HASENTRY` 0x02 và
+  `EF_ARM_ABI_FLOAT_SOFT` 0x200) — đúng mức dung sai mà
+  `native/build_arm.py` đã đặt ra trước đó cho cùng cặp linker này.
+
+Báo cáo đầy đủ ghi ra `out/carplay-arm/ARM-CHECKS.json`.
+
+### Hai điểm khác upstream, nói rõ để không bị bất ngờ
+
+1. **libc++ link tĩnh** thay vì dùng `libstdc++.so.6.0.14` của máy xe, đơn giản
+   vì ở đây không có sysroot thiết bị. An toàn được là vì **không có kiểu C++
+   nào đi qua biên module**: mọi lệnh gọi OEM đều là thunk C thuần resolve bằng
+   `dlsym` (`oem/oem_thunk.h`), mọi symbol interpose đều `extern "C"`. Hệ quả:
+   .so này **không** phụ thuộc `libstdc++.so.6` lẫn `libgcc_s.so.1` nữa.
+2. **Một reloc mới: `R_ARM_TLS_DTPMOD32`** (12 byte `.tbss`). Đó là chỗ
+   libc++abi giữ trạng thái exception đang bay (`__cxa_eh_globals`); bản upstream
+   không cần vì nó mượn TLS của libstdc++ máy xe. **Không thể bỏ exception để
+   tránh**: `nav.cpp`, `devmgr_shim.cpp` và `hud_send.cpp` đều bọc callback của
+   thread OEM bằng `catch (...)`, và `hud_send.cpp:736` ghi rõ exception lọt ra
+   là `std::terminate` → `SIGABRT` → **head unit reboot**. Reloc này là TLS
+   local-dynamic nội bộ module, mà .so nạp bằng `LD_PRELOAD` nên thuộc initial
+   load set — ld.so cấp module id ngay lúc khởi động, không phải ca `dlopen` cần
+   static TLS surplus. ARM glibc lo được chuyện này từ lâu trước 2.11.
+
+Ngoài ra bỏ `-flto` của upstream (không cần, giảm biến số) và tắt UBSan runtime
+của zig: ở `-O0` zig bật sẵn, mà runtime đó lôi theo `std.Io` của zig
+(`utimensat`…) — không có ở glibc 2.4 nên link debug đứt ngay, và một sanitizer
+runtime cũng chẳng nên có mặt trong tiến trình mà `SIGABRT` là reboot xe.
 
 ## Kiểm chứng không cần xe
 
 ```sh
 cd tests
 python -m pip install ziglang
+make test-carplay           # 43 kiem tra, 0 loi
+```
+
+Hoặc gọi trực tiếp, nếu máy không có `make`:
+
+```sh
 python -m ziglang c++ -std=c++17 -w -I ../patches/carplay-hud \
     maneuver_text_test.cpp -o maneuver_text_test
 ./maneuver_text_test        # 43 kiem tra, 0 loi
@@ -95,7 +172,11 @@ Bản vá `nav.cpp` cũng đã được biên dịch sạch bằng `zig c++ -std
   patch này không cứu được gì — lúc đó lỗi nằm ngoài tầm với của phía xe.
 - Chuỗi `maneuverDesc` thật của VietMap chưa được đọc lần nào; bộ từ khoá dựng
   theo cách hành văn thường gặp. Có log rồi thì chỉnh lại cho khớp.
-- Bản phát hành chỉ log lỗi. Muốn thấy dòng `nav TEXT-FALLBACK …` phải build
-  bản **debug** rồi chạy `vietnav-collect.sh`.
+- **Bản .so ARM chưa từng chạy trên xe.** Nó chỉ được kiểm bằng cách đọc lại
+  ELF và so với file đang chạy trên xe (xem trên). Đúng ABI không có nghĩa là
+  đúng hành vi.
+- Bản debug thì nay **đã build được** (trước đây bế tắc vì thiếu toolchain).
+  Việc còn lại là cài nó rồi chạy `vietnav-collect.sh` để lấy dòng
+  `nav PICK` / `nav TEXT-FALLBACK` trên xe.
 
 Xem [docs/carplay-vietmap-hud-gap.vi.md](../../docs/carplay-vietmap-hud-gap.vi.md).
