@@ -316,6 +316,52 @@ liệu SDK; địa chỉ file offset của slice arm64 đầu tiên):
   - Không tên nào hiện sau ≥2 vòng trên cả hai máy ⟹ bộ lọc tên không phải
     nguyên nhân; ưu tiên bắt os_log trên iPhone jailbreak (mục 5 trên).
 
+## ĐÃ CHẠY THẬT QUA ios-mcp (22-10-2026, lần 4): cả 8 tên đều KHÔNG hiện — lý thuyết lọc tên yếu đi
+
+Điều khiển tự động trên **iPhone 8 Plus jailbreak (iPhone10,5, iOS 16.7.15,
+Dopamine rootless, đã đăng nhập)** bằng ios-mcp (server HTTP chạy trên máy,
+điều khiển tap/OCR/screenshot/shell). Trình tự: mở VIETMAP LIVE 3.4.3 →
+bỏ popup "Phiên bản V3 không tương thích với thiết bị của bạn" → menu →
+Cài đặt → Cài đặt thiết bị → HUD → Kết nối thiết bị.
+
+- Màn scan hiện **"Không có thiết bị nào xung quanh bạn"** trong khi board
+  **đang xoay đủ 8 tên** (log serial `out/cycle-trial-1.log` đối chiếu từng
+  tên active trong cửa sổ scan, RSSI −45…−55 dBm từ lần quét PC trước đó).
+- Như vậy **VIETMAP-HUD, vmHUD, VIETMAP_HUD, HUD_V3, H50, H1AS, H1X, H1N
+  đều bị loại** dù tầng SDK chắc chắn chấp nhận mọi tên chứa "HUD". Lý
+  thuyết "Dart lọc tên chặt hơn" **chưa chết nhưng yếu đi rõ rệt**.
+- **Nghi phạm mạnh nhất mới: app không hề gọi scan trên iPhone** (gate ở
+  tầng trên SDK). Bằng chứng gián tiếp: máy này còn nhận popup **"Phiên bản
+  V3 không tương thích với thiết bị của bạn"** — tồn tại gate theo thiết bị
+  từ server; tính năng HUD có thể nằm sau gate tương tự.
+- **Thử dò scan-request bằng extended advertising: kênh KHÔNG dùng được.**
+  NimBLE 2.5.1 (patched nimconfig) lẫn 2.3.7 (build flags) đều cho **0 sự
+  kiện** khi: Windows bleak quét thấy board 181 lần (Windows quét passive
+  với extended ADV — không gửi AUX_SCAN_REQ), và các cửa sổ iPhone đang mở
+  app. Ngoài ra NimBLE 2.3.7 có điểm nghi: `NimBLEServer::handleGapEvent`
+  forward `BLE_GAP_EVENT_SCAN_REQ_RCVD` sang `NimBLEExtAdvertising::
+  handleGapEvent` với `arg` là con trỏ server (NimBLEExtAdvertising.cpp:81
+  đăng ký handler theo điều kiện có server) — callback onScanRequest có
+  thể không bao giờ chạy đúng khi có GATT server. **Vắng [SCAN] không
+  chứng minh app không quét.**
+- **Unified log trên máy jailbreak KHÔNG đọc được**: iOS 16 không có binary
+  `log`, công cụ get_syslog trả 0 dòng (rootless thiếu quyền) — đường kiểm
+  "app có quét không" qua chuỗi debug của SDK (`Peripheral count:`) chưa
+  thực hiện được theo cách này.
+
+### Hướng quyết định tiếp theo (xếp theo chi phí)
+
+1. **Hook runtime trên máy jailbreak** — cài Frida (dpkg) hoặc viết tweak
+   Dopamine hook `CBCentralManager scanForPeripheralsWithServices:options:`
+   và `didDiscoverPeripheral`, ghi file. Đây là quan sát trực tiếp duy nhất
+   còn lại cho câu hỏi "app có quét không / quét thấy gì".
+2. **Đối chiếu popup V3**: kiểm tra iPhone Dynamic Island (máy đã thử trước
+   đó, list cũng rỗng) có hiện popup "V3 không tương thích" không. Không
+   hiện ⟹ gate V3-compat không giải thích được list rỗng trên máy đó; hiện
+   ⟹ thử trên một máy được whitelist V3.
+3. **Bắt API config của app** (proxy + CA trên điện thoại) xem màn HUD kéo
+   cờ gì từ server trước khi quét.
+
 ## Cách lấy bằng chứng chạy thật (bước tiếp theo rẻ nhất)
 
 `flutter_blue_plus` ghi log có tiền tố `[FBP]`. Cắm tablet/điện thoại qua ADB
