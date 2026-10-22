@@ -7,6 +7,11 @@ from .protocol import StreamDecoder, event
 
 
 def main():
+    # JSONL carries Vietnamese road names. A legacy console codepage (cp1252 on
+    # Windows) cannot encode them and would abort a redirected capture, so pin
+    # UTF-8 instead of inheriting the locale.
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description='Vietnav experimental HUD BLE peripheral / offline decoder')
     sub = parser.add_subparsers(dest='mode', required=True)
     replay = sub.add_parser('decode', help='decode binary BLE write stream or hex lines from stdin')

@@ -132,13 +132,15 @@ class ProtocolTests(unittest.TestCase):
 
     def test_cli_hex_replay(self):
         raw = navigation()
+        # encoding is pinned: the CLI emits UTF-8 JSONL regardless of the host
+        # locale, and decoding it as cp1252 would hide that on Windows.
         r = subprocess.run([sys.executable, '-m', 'hud_emulator', 'decode'], cwd=ROOT,
                            input=raw[:7].hex() + '\n' + raw[7:].hex() + '\n',
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(json.loads(r.stdout)['next_road'], 'Đường Nguyễn Huệ')
         r = subprocess.run([sys.executable, '-m', 'hud_emulator', 'decode'], cwd=ROOT,
-                           input=raw[:-1].hex(), capture_output=True, text=True)
+                           input=raw[:-1].hex(), capture_output=True, text=True, encoding='utf-8')
         self.assertNotEqual(r.returncode, 0)
 
 

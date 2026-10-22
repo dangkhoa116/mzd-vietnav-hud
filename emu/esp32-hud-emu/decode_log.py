@@ -67,6 +67,10 @@ def decode_lines(lines):
 
 
 def main():
+    # Road names are Vietnamese; a legacy codepage stdout (cp1252 on Windows)
+    # would abort `decode_log.py capture.txt > capture.jsonl`, so pin UTF-8.
+    if hasattr(sys.stdout,'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('capture',type=Path)
     args=parser.parse_args()
