@@ -21,10 +21,18 @@ static void record_event(void *u, const char *s, const unsigned char *p,
   (void)p;
   (void)n;
 }
+static struct vn_guidance guides[64];
+static unsigned guide_count, guide_at;
+static void guide_event(void *u, const struct vn_guidance *g) {
+  (void)u;
+  if (guide_count < 64)
+    guides[guide_count++] = *g;
+}
 void test_reset(void) {
-  struct vn_io io = {0, send_packet, record_event};
+  struct vn_io io = {0, send_packet, record_event, guide_event};
   memset(&caps, 0, sizeof caps);
   count = at = reject_send = 0;
+  guide_count = guide_at = 0;
   vn_init(&hud, io);
 }
 void test_caps(const unsigned char *commands, const unsigned char *states,
@@ -63,4 +71,8 @@ unsigned test_pop(unsigned char *p) {
   n = lengths[at];
   memcpy(p, packets[at++], n);
   return n;
+}
+unsigned test_guide_count(void) { return guide_count; }
+const struct vn_guidance *test_guide_at(unsigned i) {
+  return i < guide_count ? &guides[i] : 0;
 }

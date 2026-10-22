@@ -27,11 +27,20 @@ static void vn_record_packet(void *user, const char *tag, const unsigned char *p
     else
         emit_mark(tag);
 }
+static void vn_guide_out(void *user, const struct vn_guidance *g)
+{
+    (void)user;
+    vn_vbs_guide(g);
+}
+static void vn_vbs_log_mark(const char *msg)
+{
+    emit_mark2("VBS ", msg);
+}
 
 static void vn_setup(void)
 {
     const char *mode = getenv("VIETNAV_NATIVE_MODE");
-    struct vn_io io = {0, vn_send_packet, vn_record_packet};
+    struct vn_io io = {0, vn_send_packet, vn_record_packet, vn_guide_out};
     vn_init(&vn_native, io);
     vn_mode = vn_same(mode, "query") ? 1 : (vn_same(mode, "advertise") ? 2 : 0);
     /* This binary has no implicit TPMS mode. No environment = inert preload.
@@ -41,6 +50,14 @@ static void vn_setup(void)
         st = S_DONE;
         bts_path = 0;
         return;
+    }
+    vn_vbs_set_logger(vn_vbs_log_mark);
+    if (vn_mode == 2) {
+        struct vn_vbs_calls calls;
+        if (vn_vbs_dl_resolve(&calls))
+            vn_vbs_bind(&calls);
+        else
+            emit_mark("VBS OEM libraries not found; HUD guidance will only be logged");
     }
     stop_after = 0;
     stay = 0;
@@ -87,6 +104,11 @@ static void vn_native_tick(void)
     pulse_tick(now, 0);
     vn_tick(&vn_native, now, inj_armed(now));
     our_handle = vn_native.handle;
+    /* Link gone or trial winding down: wipe the HUD once and release the
+     * OEM service bus. The cluster keeps the last frame across sessions,
+     * and nothing else clears it for us. */
+    if (vn_vbs_active() && vn_native.state != VN_CONNECTED)
+        vn_vbs_stop();
 }
 static void vn_native_reply(const unsigned char *p, unsigned n)
 {

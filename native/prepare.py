@@ -28,7 +28,8 @@ def prepare(source, output):
         raise ValueError('output must be separate from native sources')
     output.mkdir(parents=True, exist_ok=True)
     (output / 'v3.c').write_bytes(raw)
-    for name in ('hud_native.h', 'hud_native.c', 'tpms_adapter.inc'):
+    for name in ('hud_native.h', 'hud_native.c', 'hud_guidance.h', 'hud_guidance.c',
+                 'vn_vbs.h', 'vn_vbs.c', 'vn_vbs_dl.c', 'tpms_adapter.inc'):
         shutil.copyfile(HERE / name, output / name)
     subprocess.run(['patch', '--batch', '--forward', '-p1', '-i', str(HERE / 'tpms-v3-hud.patch')],
                    cwd=output, check=True, capture_output=True, text=True)
@@ -50,8 +51,11 @@ def main():
         prepare(args.tpms.resolve(), args.out.resolve())
         if args.host_build:
             subprocess.run(['gcc', '-shared', '-fPIC', '-O2', '-Wall', '-Wextra', '-Werror',
-                            '-fno-builtin', '-o', str(args.out / 'libvietnav-native-host.so'),
-                            str(args.out / 'v3.c'), str(args.out / 'hud_native.c'), '-ldl'], check=True)
+                            '-fno-builtin', '-DVN_VBS_HAVE_UNISTD',
+                            '-o', str(args.out / 'libvietnav-native-host.so'),
+                            str(args.out / 'v3.c'), str(args.out / 'hud_native.c'),
+                            str(args.out / 'hud_guidance.c'), str(args.out / 'vn_vbs.c'),
+                            str(args.out / 'vn_vbs_dl.c'), '-ldl'], check=True)
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'prepare: {exc}\n')
     print(f'Prepared experimental source in {args.out}')

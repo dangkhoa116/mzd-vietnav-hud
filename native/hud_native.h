@@ -2,6 +2,7 @@
 #ifndef VIETNAV_HUD_NATIVE_H
 #define VIETNAV_HUD_NATIVE_H
 #include <stdint.h>
+#include "hud_guidance.h"
 
 #define VN_MTU 23
 #define VN_FRAME_MAX 2048
@@ -18,12 +19,15 @@ struct vn_caps {
 };
 /* send(): complete H4 packet, bounded/nonblocking transport; return 1 on success.
  * record(): only our data. No pointers remain valid after the callback.
+ * guide(): one Mazda HUD guidance record per accepted change (hud_guidance.h);
+ * optional - leave NULL when no consumer is attached.
  * All calls are serialized by the transport's receive lock. No OS/libc required.
  */
 struct vn_io {
     void *user;
     int (*send)(void *, const unsigned char *, unsigned);
     void (*record)(void *, const char *, const unsigned char *, unsigned);
+    void (*guide)(void *, const struct vn_guidance *);
 };
 struct vn_hud {
     struct vn_io io;
@@ -37,6 +41,7 @@ struct vn_hud {
     unsigned char queue_len[VN_QUEUE];
     unsigned char wire[VN_FRAME_MAX];
     unsigned wire_len;
+    struct vn_guide_state guide;
     unsigned char info[128];
     unsigned info_len, info_at;
 };

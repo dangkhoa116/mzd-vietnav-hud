@@ -50,7 +50,10 @@ def main():
         library = output / 'libvietnav-native-arm.so'
         subprocess.run([cc, '-std=gnu99', '--sysroot=' + str(sysroot), '-shared', '-fPIC', '-O2',
                         '-Wall', '-Wextra', '-Werror', '-fno-builtin', '-fno-stack-protector', '-s',
-                        '-o', str(library), str(output / 'v3.c'), str(output / 'hud_native.c'), '-ldl'], check=True)
+                        '-DVN_VBS_HAVE_UNISTD',
+                        '-o', str(library), str(output / 'v3.c'), str(output / 'hud_native.c'),
+                        str(output / 'hud_guidance.c'), str(output / 'vn_vbs.c'),
+                        str(output / 'vn_vbs_dl.c'), '-ldl'], check=True)
         report = inspect_elf(readelf, library)
         baseline = inspect_elf(readelf, tpms / 'tpms/v1/libtpms-v1.so')
         if set(report['required_symbols']) - set(baseline['required_symbols']):
@@ -64,7 +67,10 @@ def main():
             raise ValueError('unexpected ELF flag difference from the baseline')
         report.update(sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                       compiled_sources={name: hashlib.sha256((output / name).read_bytes()).hexdigest()
-                                        for name in ('v3.c', 'hud_native.c', 'hud_native.h', 'tpms_adapter.inc')},
+                                        for name in ('v3.c', 'hud_native.c', 'hud_native.h',
+                                                     'hud_guidance.c', 'hud_guidance.h',
+                                                     'vn_vbs.c', 'vn_vbs.h', 'vn_vbs_dl.c',
+                                                     'tpms_adapter.inc')},
                       tpms_source_sha256=SOURCE_SHA256,
                       compiler=subprocess.check_output([cc, '--version'], text=True).splitlines()[0],
                       baseline_flags=baseline['flags'], optional_flag_difference=flag_difference,

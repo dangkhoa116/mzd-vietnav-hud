@@ -239,6 +239,9 @@ static void reset_link(struct vn_hud *v)
 {
     v->cccd = v->tpms_cccd = v->wire_len = v->info_len = v->info_at = v->acl_out = 0;
     v->head = v->tail = 0;
+    /* New session: the guidance stream restarts so a reconnected app re-emits
+     * its first live frame instead of being deduped against the old route. */
+    vn_guide_reset(&v->guide);
 }
 
 void vn_connected(struct vn_hud *v, unsigned status, unsigned handle, unsigned role, uint64_t now)
@@ -480,6 +483,19 @@ static void wire_frame(struct vn_hud *v, const unsigned char *p, unsigned n)
         }
     cmd = p[12];
     record(v, "VML FRAME CMD", &cmd, 1);
+    if (cmd == 0 || cmd == 0x40) {
+        /* Navigation push (0x00 = layouts v1/fixed, 0x40 = variable v2 with
+         * the JPEG arrow). Icon hint stays 0 here: classifying the arrow
+         * image needs the offline fingerprint set, so the HUD holds the last
+         * icon (straight initially) - distance/road/clear are all live. */
+        struct vn_nav nav;
+        struct vn_guidance guidance;
+        if (vn_nav_decode(&nav, p + 12, n - 20) && v->io.guide) {
+            if (vn_guide_feed(&v->guide, &guidance, &nav, 0))
+                v->io.guide(v->io.user, &guidance);
+        }
+        return;
+    }
     if (cmd != 14 || n != 22 || p[13] != 0)
         return;
     if (v->info_at < v->info_len) {

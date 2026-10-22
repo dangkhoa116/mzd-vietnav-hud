@@ -23,6 +23,7 @@ class NativeTests(unittest.TestCase):
         subprocess.run(cc + ['-std=c99', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
                              '-fsanitize=undefined', '-fno-sanitize-recover=all', '-shared', '-fPIC',
                              '-I', str(ROOT / 'native'), str(ROOT / 'native/hud_native.c'),
+                             str(ROOT / 'native/hud_guidance.c'),
                              str(ROOT / 'tests/native_driver.c'), '-o', str(lib)], check=True)
         cls.lib = C.CDLL(str(lib))
         cls.lib.test_caps.argtypes = [C.c_char_p, C.c_char_p, C.c_uint, C.c_uint, C.c_uint]

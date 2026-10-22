@@ -770,3 +770,35 @@ Emu không tái hiện radio TI/HFP/A2DP/LE đồng thời; không dùng kết q
 > Phân biệt rõ kết quả host/QEMU với radio trên xe, và đừng phát biểu .so ARM là
 > đã chạy được trên xe — nó chỉ mới đúng ABI. Không tự flash xe hoặc
 > publish/push khi chưa được yêu cầu.
+
+## Lần 6 (22-10 tối): nối đường VBS trong daemon C
+
+Việc làm: đầy đủ hoá mục "nối VBS" mà README native còn thiếu — daemon C giờ
+giải mã nav và tự đẩy `com.jci.vbs.navi` thay vì chỉ ghi log.
+
+- `native/hud_guidance.{h,c}` (freestanding, không OS/libc): port C của
+  `bridge/vmlhud_nav.py` (cả 3 layout, ưu tiên khớp trọn vẹn như Python) +
+  `GuidanceBuilder` của `vmlhud_vbs.py` (dedup, sync 1..7, xoa khi
+  distance 0xFFFFFFFF, km hectometer làm tròn half-to-even) + chuẩn hoá
+  tiếng Việt 3 byte → 2 byte cho font HUD (port từ hud_send.cpp
+  mazda-carplay-hud, cùng tác giả). `wire_frame()` giờ gọi decode cho
+  CMD 0x00/0x40 và phát guidance qua callback mới `vn_io.guide`.
+- `native/vn_vbs.{h,c}` + `vn_vbs_dl.c`: sender tới VBS bằng chính OEM
+  libjcidbus + libjcivbsnaviclient (dlopen cả hai vì bds không có sẵn),
+  bus name riêng `com.jci.vietnav.hud`, GetHUDStatus fail-open, Msg1+Msg2
+  luôn thành cặp, tên đường trống → một dấu cách, stop() gửi cặp trắng rồi
+  thả bus. Backend inject được — test chạy với fake, không cần D-Bus.
+- Adapter (`tpms_adapter.inc`): guide callback → `vn_vbs_guide`, tick theo
+  dõi mất kết nối/thôi thử để wipe HUD đúng một lần.
+- Icon mũi tên: C tạm giữ icon cũ (mặc định thẳng) vì nhận dạng JPEG cần
+  fingerprint offline — vẫn phía Python (`hud_live_view`).
+- Kiểm: module mới `tests/test_hud_guidance.py` 19/19 (parity từng field
+  Python↔C, normalize, sender flow/clear/gate/failure, ATT write → frame →
+  guidance qua checksum thật); suite local 96/96; v3.c đã patch + 4 file mới
+  compile sạch zig nhắm x86_64-linux và arm-linux-gnueabi cortex_a9.
+  CI matrix thêm `test_hud_guidance`.
+
+Chưa làm/không lặp lại: chưa thử trên xe (radio/bds/dlopen OEM trên xe chưa
+chạy lần nào — .so chỉ mới đúng ABI + logic host); speed limit chưa decode
+(khung camera sendCameraInformation chưa port sang C); nhận dạng mũi tên
+trong C chưa có (cần bộ fingerprint nhúng — làm sau nếu cần).

@@ -1,10 +1,11 @@
 --- a/v3.c
 +++ b/v3.c
-@@ -108,6 +108,16 @@
+@@ -108,6 +108,17 @@
  #include <unistd.h>
  #include <sys/select.h>
  #include <sys/stat.h>
 +#include "hud_native.h"
++#include "vn_vbs.h"
 +static struct vn_hud vn_native;
 +static struct vn_caps vn_cap;
 +static int vn_mode, vn_started;

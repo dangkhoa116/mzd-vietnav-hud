@@ -28,6 +28,17 @@ thu log, huỷ lịch và gỡ; chỉ chạy HUD ở một lần khởi động 
 - Ghi BLE write của chính HUD thành `VML RX`. Tool Python đọc lại thành
   navigation/camera/heartbeat, kể cả legacy. Assembler bắt tay C chỉ xử lý
   khung mới, giới hạn 2048 byte; chưa xử lý ảnh/OTA lớn.
+- **Đường VBS đã nối (host, chưa lên xe)**: khung nav CMD 0x00/0x40 được giải
+  mã ngay trong core C (`hud_guidance.c`, parity từng field với
+  `bridge/vmlhud_nav.py` + `vmlhud_vbs.py`, test 19 case), gộp thành guidance
+  (dedup, sync bit 1..7, xoa khi khung rỗi) rồi `vn_vbs.c` đẩy cặp
+  `VBS_NAVI_SetHUDDisplayMsgReq` + `VBS_NAVI_TMC_SetHUD_Display_Msg2` qua
+  libjcidbus/libjcivbsnaviclient OEM (dlopen trong `vn_vbs_dl.c`, bus name
+  riêng `com.jci.vietnav.hud`, probe GetHUDStatus fail-open, Msg2 luôn đi kèm
+  Msg1, tên đường trống thành một dấu cách). Tên đường tiếng Việt được chuẩn
+  hoá 3 byte → 2 byte cho font HUD (port từ hud_send.cpp của
+  mazda-carplay-hud). Icon: giữ icon cũ, mặc định thẳng — nhận dạng mũi tên
+  JPEG cần bộ fingerprint offline, vẫn nằm phía Python.
 - Một ACL packet đang chờ completion tại một thời điểm. Completion của handle
   khác không cấp credit cho HUD; mux giữ traffic/credit của `bds`.
 
@@ -76,7 +87,12 @@ PYTHON=.venv-hud/bin/python sh native/run_tests.sh
 
 Đã kiểm chứng:
 
-- **70 test host**: codec/CLI, BlueZ/D-Bus, core C, transport và USB trên CMU giả.
+- **96 test host** trên máy dev (protocol, bridge, hud_out, arrow, native
+  21/21, module mới `test_hud_guidance` 19/19 — parity decode/builders với
+  Python, normalize tiếng Việt, sender VBS với backend giả, đường ATT→frame→
+  guidance); BlueZ/D-Bus, transport, USB, esp32 chạy trong CI Linux.
+- Toàn v3.c đã patch + các file mới compile sạch nhắm x86_64-linux và
+  arm-linux-gnueabi (cortex_a9) bằng zig trên máy Windows.
 - **229 kiểm tra TPMS mux** vẫn pass với source đã ghép native.
 - **50.000 input ATT lỗi** qua AddressSanitizer + UndefinedBehaviorSanitizer.
 - Transport chạy preload thật, PTY thật, process giả bds; so đúng từng byte
@@ -126,10 +142,13 @@ thiếu byte. Không giải mã/log traffic classic.
 Dùng USB riêng theo [hướng dẫn thử](usb/STEPS.vi.txt): query trước, lưu log,
 khởi động lại về TPMS rồi đặt lịch advertise. Installer chỉ cho advertise
 khi query thành công với cùng thư viện/monitor/BLE pack/bds.real.
-Mốc cần xác nhận: VietMap tìm thấy HUD, mở GATT, nhận HUDInfo và gửi navigation.
-Sau đó chốt mã hướng rẽ/đơn vị rồi nối VBS. Chưa hỗ trợ TPMS central + HUD
-peripheral đồng thời. TPMS trở lại ở lần start kế tiếp, không bật lại giữa
-phiên native khi hết thời gian thử.
+Mốc cần xác nhận: VietMap tìm thấy HUD, mở GATT, nhận HUDInfo và gửi
+navigation **và guidance thật lên được VBS/HUD xe** (đường VBS đã code xong,
+chưa từng chạy trên xe — dlopen libjcidbus/libjcivbsnaviclient trong bds,
+bus name `com.jci.vietnav.hud`). Sau đó chốt bảng mã hướng rẽ từ ảnh mũi tên
+(nhận dạng vẫn phía Python) và xem speed/current_road có đổ khi chạy xe.
+Chưa hỗ trợ TPMS central + HUD peripheral đồng thời. TPMS trở lại ở lần
+start kế tiếp, không bật lại giữa phiên native khi hết thời gian thử.
 
 Tham chiếu command/state:
 [Bluetooth HCI specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-54/out/en/host-controller-interface/host-controller-interface-functional-specification.html),
