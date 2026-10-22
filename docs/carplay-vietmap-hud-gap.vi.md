@@ -50,11 +50,26 @@ của khung iAP2 `0x8059`, và `nav.cpp` lọc bỏ `maneuverType == 0` qua
 `is_context_type()` — maneuver không có kiểu sẽ bị **bỏ hết**, HUD trống đúng
 như triệu chứng.
 
-**Nhưng không được dừng ở đó.** Máy test là iPhone 8 Plus, **iOS 16.7.15**, mà
-`CPManeuver.maneuverType` chỉ có từ **iOS 17.4**. Trên máy này **không app nào**
-đặt được thuộc tính đó, kể cả Google Maps. Vậy Google Maps vẫn ra mũi tên bằng
-đường khác, và chênh lệch thật nằm ở chỗ chưa biết. Không kết luận
-"VietMap thiếu `setManeuverType:`" là nguyên nhân.
+Lưu ý một nhầm lẫn đã được chủ xe đính chính: iPhone 8 Plus / iOS 16.7.15 là
+**máy nghiên cứu BLE**, KHÔNG phải máy dùng để test trên xe. Vì vậy lập luận
+"iOS 16 thì không app nào đặt được `maneuverType`" **không áp dụng** cho phép
+thử đã chạy.
+
+Với máy test chạy iOS 17.4 trở lên, đây là lời giải mạch lạc nhất cho đúng triệu
+chứng: Google Maps đặt `maneuverType` → xe nhận enum thật → có mũi tên; VietMap
+không đặt → xe nhận `0` = NoTurn → `is_context_type()` nuốt sạch → HUD trống.
+
+Vẫn **chưa phải kết luận đã đo**: chưa có log trên xe nên chưa biết chắc khung
+`0x8059` có tới `jciCARPLAY` khi chạy VietMap hay không.
+
+### Bản vá theo giả thuyết này
+
+[`patches/carplay-hud/`](../patches/carplay-hud/README.md) thêm nhánh dự phòng
+vào `nav.cpp`: khi `maneuverType == 0` ở `idx >= 1` thì suy hướng rẽ từ chuỗi
+lệnh (`maneuverDesc`) thay vì vứt đi. Chỉ `type == 0` được xét lại nên app có
+điền trường này giữ nguyên hành vi cũ. Đã biên dịch sạch bằng `zig c++` và có
+43 kiểm tra host (gồm nhóm câu **phải bị từ chối** như "Đi tiếp trên Quốc Lộ 13",
+để không dán mũi tên sai suốt cả chặng).
 
 ## 3. Thứ bắt buộc phải có log trên xe
 

@@ -1,0 +1,324 @@
+diff --git a/mazda/patches/blmjcicarplay/maneuver_text.h b/mazda/patches/blmjcicarplay/maneuver_text.h
+new file mode 100644
+index 0000000..b011b9b
+--- /dev/null
++++ b/mazda/patches/blmjcicarplay/maneuver_text.h
+@@ -0,0 +1,226 @@
++// SPDX-License-Identifier: AGPL-3.0-or-later
++//
++// Fallback: derive a HUD turn event from the maneuver INSTRUCTION TEXT when the
++// CarPlay app does not give a usable CPManeuverType.
++//
++// Why this exists
++// ---------------
++// `nav.cpp` classifies a maneuver from `maneuverType` (@0x128 of the iAP2 0x8059
++// burst) and drops anything `is_context_type()` matches — which includes type 0
++// (NoTurn). That is correct for an app that fills the field in.
++//
++// `CPManeuver.maneuverType` only exists since iOS 17.4, and an app is free to
++// never set it: a CarPlay nav app can legally ship maneuvers carrying only
++// `instructionVariants` (text) + `symbolImage` (a rendered arrow). VIETMAP LIVE
++// 3.4.3 is exactly such an app — its plugin binary has `setInstructionVariants:`
++// and `setSymbolImage:` but no `setManeuverType:` at all. Every one of its
++// maneuvers therefore arrives as type 0 and is discarded, so the HUD stays blank
++// while Google Maps (which does set the type) works.
++//
++// The text is still there, so recover the turn from it. This is additive: it
++// only runs where the bridge would otherwise display nothing.
++//
++// Deliberately NOT a general translator: it answers one question — "is this
++// string a turn instruction, and which way?" — and says no when unsure, so a
++// road-following line never paints a bogus arrow.
++
++#ifndef VIETNAV_CARPLAY_MANEUVER_TEXT_H
++#define VIETNAV_CARPLAY_MANEUVER_TEXT_H
++
++#include <stddef.h>
++#include <stdint.h>
++
++namespace maneuver_text {
++
++// --- Vietnamese -> ASCII ------------------------------------------------
++//
++// Matching happens on a folded, lower-cased copy so one pattern covers every
++// accent spelling ("Rẽ phải", "RẼ PHẢI", "Re phai"). Only the letters that
++// carry Vietnamese diacritics need mapping; everything else passes through.
++inline char base_letter(uint32_t cp)
++{
++    if (cp < 0x80) {
++        // Only letters and digits survive. Punctuation MUST become a separator:
++        // leaving it attached ("u-turn", "binh,") breaks every word-anchored
++        // pattern below.
++        if (cp >= 'A' && cp <= 'Z') return static_cast<char>(cp - 'A' + 'a');
++        if ((cp >= 'a' && cp <= 'z') || (cp >= '0' && cp <= '9'))
++            return static_cast<char>(cp);
++        return ' ';
++    }
++    if (cp == 0x110 || cp == 0x111) return 'd';                      // Đ đ
++    if ((cp >= 0xC0 && cp <= 0xC3) || (cp >= 0xE0 && cp <= 0xE3) ||
++        cp == 0x102 || cp == 0x103 || (cp >= 0x1EA0 && cp <= 0x1EB7)) return 'a';
++    if (cp == 0xC8 || cp == 0xC9 || cp == 0xCA || cp == 0xE8 || cp == 0xE9 ||
++        cp == 0xEA || (cp >= 0x1EB8 && cp <= 0x1EC7)) return 'e';
++    if (cp == 0xCC || cp == 0xCD || cp == 0xEC || cp == 0xED ||
++        cp == 0x128 || cp == 0x129 || (cp >= 0x1EC8 && cp <= 0x1ECB)) return 'i';
++    if ((cp >= 0xD2 && cp <= 0xD5) || (cp >= 0xF2 && cp <= 0xF5) ||
++        cp == 0x1A0 || cp == 0x1A1 || (cp >= 0x1ECC && cp <= 0x1EE3)) return 'o';
++    if (cp == 0xD9 || cp == 0xDA || cp == 0xF9 || cp == 0xFA ||
++        cp == 0x168 || cp == 0x169 || cp == 0x1AF || cp == 0x1B0 ||
++        (cp >= 0x1EE4 && cp <= 0x1EF1)) return 'u';
++    if (cp == 0xDD || cp == 0xFD || (cp >= 0x1EF2 && cp <= 0x1EF9)) return 'y';
++    return ' ';   // anything else is a separator, never part of a keyword
++}
++
++// UTF-8 -> folded lower-case ASCII with runs of separators collapsed to one
++// space, and a leading/trailing space added so patterns can anchor on words.
++// Always NUL-terminates; truncates rather than overflowing.
++inline void fold(const char *src, char *out, size_t out_size)
++{
++    if (!out || out_size == 0) return;
++    size_t w = 0;
++    bool pending_space = true;   // leading space
++    const unsigned char *p = reinterpret_cast<const unsigned char *>(src);
++    if (!p) { out[0] = '\0'; return; }
++
++    while (*p && w + 2 < out_size) {
++        uint32_t cp;
++        int extra;
++        if (*p < 0x80)            { cp = *p;          extra = 0; }
++        else if ((*p & 0xE0) == 0xC0) { cp = *p & 0x1F; extra = 1; }
++        else if ((*p & 0xF0) == 0xE0) { cp = *p & 0x0F; extra = 2; }
++        else if ((*p & 0xF8) == 0xF0) { cp = *p & 0x07; extra = 3; }
++        else { ++p; continue; }                       // stray continuation byte
++        ++p;
++        bool truncated = false;
++        for (int i = 0; i < extra; ++i) {
++            if ((*p & 0xC0) != 0x80) { truncated = true; break; }
++            cp = (cp << 6) | (*p & 0x3F);
++            ++p;
++        }
++        if (truncated) continue;
++
++        char c = base_letter(cp);
++        if (c == ' ' || c == '\0') { pending_space = true; continue; }
++        if (pending_space) { out[w++] = ' '; pending_space = false; }
++        out[w++] = c;
++    }
++    // Trailing space only when something was written, so an empty or
++    // punctuation-only line folds to "" and is rejected outright.
++    if (w > 0 && w + 1 < out_size) out[w++] = ' ';
++    out[w] = '\0';
++}
++
++inline bool has(const char *folded, const char *needle)
++{
++    if (!folded || !needle) return false;
++    for (const char *s = folded; *s; ++s) {
++        const char *a = s, *b = needle;
++        while (*b && *a == *b) { ++a; ++b; }
++        if (!*b) return true;
++    }
++    return false;
++}
++
++inline bool has_any(const char *folded, const char *const *needles, size_t count)
++{
++    for (size_t i = 0; i < count; ++i)
++        if (has(folded, needles[i])) return true;
++    return false;
++}
++
++#define MT_ANY(folded, ...) \
++    ([&]{ static const char *const kN[] = { __VA_ARGS__ }; \
++          return has_any((folded), kN, sizeof(kN) / sizeof(kN[0])); }())
++
++// Result mirrors nav.cpp's Maneuver, but this header stays dependency-free so it
++// can be unit-tested on the host. nav.cpp copies the fields across.
++struct TextTurn {
++    uint32_t event;   // hu.proto TURN_EVENT
++    uint32_t side;    // 1=LEFT 2=RIGHT 3=NONE
++};
++
++// hu.proto TURN_EVENT values nav.cpp uses (kept local so the header is standalone).
++enum : uint32_t {
++    TT_DEPART = 1, TT_NAME_CHANGE = 2, TT_SLIGHT = 3, TT_TURN = 4, TT_SHARP = 5,
++    TT_UTURN = 6, TT_ON_RAMP = 7, TT_OFF_RAMP = 8, TT_FORK = 9, TT_MERGE = 10,
++    TT_ROUNDABOUT = 13, TT_STRAIGHT = 14, TT_DEST = 19
++};
++enum : uint32_t { TT_SIDE_LEFT = 1, TT_SIDE_RIGHT = 2, TT_SIDE_NONE = 3 };
++
++// Returns false when the text is not a turn instruction (road-following,
++// compass heading, empty, or simply unrecognised). The caller must then keep
++// treating the maneuver as context — guessing here would paint a wrong arrow
++// for a whole leg.
++inline bool classify(const char *desc, TextTurn *out)
++{
++    if (!desc || !out) return false;
++    char f[320];
++    fold(desc, f, sizeof(f));
++    if (f[0] == '\0' || f[1] == '\0') return false;
++
++    // Road-following / heading wording. NOT an outright reject: "đi theo lối ra
++    // bên phải" is a real off-ramp. It only vetoes a bare straight at the end,
++    // so "đi tiếp trên đường X" can never become an arrow that sticks for the
++    // rest of the leg.
++    const bool follows_road =
++        MT_ANY(f, " di tiep ", " tiep tuc ", " di theo ", " bam theo ",
++                  " continue on ", " head ", " proceed ", " stay on ", " follow ");
++
++    // Destination / start. Before the left/right tests: "đã đến đích bên phải"
++    // is an arrival, not a right turn.
++    if (MT_ANY(f, " da den ", " den noi ", " diem den ", " dich den ",
++                  " arrive ", " arriving ", " destination ")) {
++        out->event = TT_DEST;
++        out->side  = MT_ANY(f, " ben trai ", " phia trai ", " on the left ") ? TT_SIDE_LEFT
++                   : MT_ANY(f, " ben phai ", " phia phai ", " on the right ") ? TT_SIDE_RIGHT
++                   : TT_SIDE_NONE;
++        return true;
++    }
++    if (MT_ANY(f, " bat dau ", " xuat phat ", " khoi hanh ", " depart ", " start ")) {
++        out->event = TT_DEPART;
++        out->side  = TT_SIDE_NONE;
++        return true;
++    }
++
++    // U-turn and roundabout before the plain left/right tests: both wordings
++    // usually also contain a side word.
++    if (MT_ANY(f, " quay dau ", " quay xe ", " u turn ", " uturn ")) {
++        out->event = TT_UTURN;
++        out->side  = MT_ANY(f, " phai ", " right ") ? TT_SIDE_RIGHT : TT_SIDE_LEFT;
++        return true;
++    }
++    if (MT_ANY(f, " vong xuyen ", " vong xoay ", " bung binh ", " roundabout ", " rotary ")) {
++        out->event = TT_ROUNDABOUT;
++        out->side  = TT_SIDE_NONE;   // nav.cpp supplies the drive-side glyph bank
++        return true;
++    }
++
++    const bool left  = MT_ANY(f, " trai ", " left ");
++    const bool right = MT_ANY(f, " phai ", " right ");
++    if (left == right) {
++        // No side, or a contradictory line: only an explicit straight counts,
++        // and not when the line is really "keep going along this road".
++        if (!follows_road && MT_ANY(f, " di thang ", " thang tien ", " straight ")) {
++            out->event = TT_STRAIGHT;
++            out->side  = TT_SIDE_NONE;
++            return true;
++        }
++        return false;
++    }
++    const uint32_t side = left ? TT_SIDE_LEFT : TT_SIDE_RIGHT;
++
++    // Qualifiers before the plain turn: "rẽ phải gấp" contains "re phai".
++    if (MT_ANY(f, " gap ", " ngoat ", " sharp "))                 out->event = TT_SHARP;
++    else if (MT_ANY(f, " chech ", " slight ", " bear "))          out->event = TT_SLIGHT;
++    else if (MT_ANY(f, " giu lan ", " di theo lan ", " keep ", " fork "))
++                                                                  out->event = TT_FORK;
++    else if (MT_ANY(f, " nhap lan ", " nhap vao ", " merge "))     out->event = TT_MERGE;
++    else if (MT_ANY(f, " loi ra ", " ra khoi ", " exit ", " off ramp "))
++                                                                  out->event = TT_OFF_RAMP;
++    else if (MT_ANY(f, " duong dan ", " len cao toc ", " on ramp ", " ramp "))
++                                                                  out->event = TT_ON_RAMP;
++    else if (MT_ANY(f, " re ", " queo ", " turn "))                out->event = TT_TURN;
++    else return false;   // a side word alone is not an instruction
++
++    out->side = side;
++    return true;
++}
++
++#undef MT_ANY
++
++}  // namespace maneuver_text
++
++#endif  // VIETNAV_CARPLAY_MANEUVER_TEXT_H
+diff --git a/mazda/patches/blmjcicarplay/nav.cpp b/mazda/patches/blmjcicarplay/nav.cpp
+index 6b63846..23572e2 100644
+--- a/mazda/patches/blmjcicarplay/nav.cpp
++++ b/mazda/patches/blmjcicarplay/nav.cpp
+@@ -52,6 +52,7 @@
+ 
+ #include "patch.h"
+ #include "hud/hud_send.h"
++#include "maneuver_text.h"   // [VIETNAV] fallback when the app sets no CPManeuverType
+ 
+ #include <stdint.h>
+ #include <stdio.h>
+@@ -92,6 +93,26 @@ constexpr uint32_t EV_DEPART = 1, EV_NAME_CHANGE = 2, EV_SLIGHT = 3, EV_TURN = 4
+                    EV_FERRY = 16, EV_DEST = 19;
+ constexpr uint32_t SIDE_LEFT = 1, SIDE_RIGHT = 2, SIDE_NONE = 3;
+ 
++// [VIETNAV] maneuver_text.h repeats these numbers so it can be unit-tested on the
++// host without pulling in patch.h. Keep the two in lockstep.
++static_assert(maneuver_text::TT_TURN       == EV_TURN       &&
++              maneuver_text::TT_SHARP      == EV_SHARP      &&
++              maneuver_text::TT_SLIGHT     == EV_SLIGHT     &&
++              maneuver_text::TT_UTURN      == EV_UTURN      &&
++              maneuver_text::TT_FORK       == EV_FORK       &&
++              maneuver_text::TT_MERGE      == EV_MERGE      &&
++              maneuver_text::TT_OFF_RAMP   == EV_OFF_RAMP   &&
++              maneuver_text::TT_ON_RAMP    == EV_ON_RAMP    &&
++              maneuver_text::TT_ROUNDABOUT == EV_ROUNDABOUT &&
++              maneuver_text::TT_STRAIGHT   == EV_STRAIGHT   &&
++              maneuver_text::TT_DEPART     == EV_DEPART     &&
++              maneuver_text::TT_DEST       == EV_DEST,
++              "maneuver_text TURN_EVENT numbering drifted from nav.cpp");
++static_assert(maneuver_text::TT_SIDE_LEFT  == SIDE_LEFT  &&
++              maneuver_text::TT_SIDE_RIGHT == SIDE_RIGHT &&
++              maneuver_text::TT_SIDE_NONE  == SIDE_NONE,
++              "maneuver_text SIDE numbering drifted from nav.cpp");
++
+ // --- latched display state (persists between bursts; the 2Hz hud keep-alive resends it) ---
+ uint32_t g_disp_event  = EV_STRAIGHT;
+ uint32_t g_disp_side   = SIDE_NONE;
+@@ -330,8 +351,24 @@ extern "C" void nav_on_devmgr_msg(const void *msgp, long n)
+         }
+ 
+         uint32_t mtype     = read_u32(b, n, kManeuverTypeOff);
++
++        // [VIETNAV] CPManeuver.maneuverType only exists since iOS 17.4 and an app
++        // is free never to set it: a CarPlay nav app may ship maneuvers carrying
++        // only instructionVariants + symbolImage. VIETMAP LIVE 3.4.3 is exactly
++        // that (its plugin has setInstructionVariants:/setSymbolImage: but no
++        // setManeuverType:), so every maneuver arrives as 0 = NoTurn and the
++        // context filter below throws the whole route away — HUD stays blank
++        // while Apple/Google Maps work. Recover the turn from the text instead.
++        // Only type 0 is reconsidered, so an app that DOES fill the field keeps
++        // its real context filtering untouched.
++        char     text[kManeuverTextMax + 1];
++        read_str(b, n, kManeuverTextOff, text, sizeof(text));
++        maneuver_text::TextTurn tt{};
++        const bool text_turn = (mtype == 0) && (idx != 0) &&
++                               maneuver_text::classify(text, &tt);
++
+         // Skip idx0 (heading) and in-list context entries — buffer only displayable turns.
+-        if (idx == 0 || is_context_type(mtype)) return;
++        if (idx == 0 || (is_context_type(mtype) && !text_turn)) return;
+         if (g_buf_count >= kMaxBurst) return;
+ 
+         uint32_t validInfo = read_u32(b, n, kValidInfoOff);
+@@ -340,10 +377,24 @@ extern "C" void nav_on_devmgr_msg(const void *msgp, long n)
+         int32_t  jAngle    = read_s16(b, n, kJunctionAngleOff);
+         char     road[256];
+         read_str(b, n, kRoadNameOff, road, sizeof(road));
+-        char     text[kManeuverTextMax + 1];
+-        read_str(b, n, kManeuverTextOff, text, sizeof(text));
+ 
+         Maneuver mv = classify(mtype, junction, jAngle, driveSide);
++        if (text_turn) {
++            mv.event = tt.event;
++            if (tt.event == maneuver_text::TT_ROUNDABOUT) {
++                // Leave the roundabout glyph to the same rule classify() uses:
++                // drive-side bank + the real exit bearing from 0x346.
++                mv.side = (driveSide == 1) ? SIDE_LEFT : SIDE_RIGHT;
++                int32_t a = jAngle % 360;
++                if (a < 0) a += 360;
++                mv.angle = a;
++            } else {
++                mv.side  = tt.side;
++                mv.angle = 0;
++            }
++            LOGD("nav TEXT-FALLBACK idx=%u desc=\"%s\" -> ev=%u side=%u",
++                 idx, text, mv.event, mv.side);
++        }
+ 
+         BufManeuver &e = g_buf[g_buf_count++];
+         e.mtype = mtype; e.idx = idx; e.validInfo = validInfo; e.mv = mv;
