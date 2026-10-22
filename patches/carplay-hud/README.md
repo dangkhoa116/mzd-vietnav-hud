@@ -29,6 +29,9 @@ mũi tên đã render). **VIETMAP LIVE 3.4.3 đúng là loại đó** — kiểm
 | **`setManeuverType:`** | **không** |
 | `setJunctionType:` / `setJunctionExitAngle:` | không |
 
+Máy đã test trên xe là **iPhone Air / iOS 27.0.1**, nên API này chắc chắn có
+sẵn — không phải chuyện "iOS quá cũ". App đơn giản là không gọi nó.
+
 Nên mọi maneuver của VietMap tới xe với `maneuverType == 0`, bị lọc sạch, và HUD
 không bao giờ có gì để vẽ.
 

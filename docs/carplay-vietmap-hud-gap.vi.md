@@ -51,15 +51,19 @@ của khung iAP2 `0x8059`, và `nav.cpp` lọc bỏ `maneuverType == 0` qua
 như triệu chứng.
 
 Lưu ý một nhầm lẫn đã được chủ xe đính chính: iPhone 8 Plus / iOS 16.7.15 là
-**máy nghiên cứu BLE**, KHÔNG phải máy dùng để test trên xe. Vì vậy lập luận
-"iOS 16 thì không app nào đặt được `maneuverType`" **không áp dụng** cho phép
-thử đã chạy.
+**máy nghiên cứu BLE**, KHÔNG phải máy dùng để test trên xe.
 
-Với máy test chạy iOS 17.4 trở lên, đây là lời giải mạch lạc nhất cho đúng triệu
-chứng: Google Maps đặt `maneuverType` → xe nhận enum thật → có mũi tên; VietMap
-không đặt → xe nhận `0` = NoTurn → `is_context_type()` nuốt sạch → HUD trống.
+**Máy đã test trên xe: iPhone Air, iOS 27.0.1.** Điều này chốt hẳn phía iOS:
+`CPManeuver.maneuverType` có từ iOS 17.4, nên trên máy này API **chắc chắn có
+sẵn**. Không còn đường thoát "hệ điều hành quá cũ" — app không điền trường đó là
+vì bản thân app không bao giờ gọi `setManeuverType:`, đúng như kiểm trong
+`vietmap_live_navigation_plugin.framework`.
 
-Vẫn **chưa phải kết luận đã đo**: chưa có log trên xe nên chưa biết chắc khung
+Vậy lời giải cho đúng triệu chứng là: Google Maps đặt `maneuverType` → xe nhận
+enum thật → có mũi tên; VietMap không đặt → xe nhận `0` = NoTurn →
+`is_context_type()` nuốt sạch → HUD trống.
+
+Phần còn lại **vẫn chưa đo**: chưa có log trên xe nên chưa biết chắc khung
 `0x8059` có tới `jciCARPLAY` khi chạy VietMap hay không.
 
 ### Bản vá theo giả thuyết này
