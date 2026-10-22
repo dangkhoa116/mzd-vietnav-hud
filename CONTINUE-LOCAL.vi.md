@@ -216,6 +216,12 @@ chứng minh nó giải mã đúng khung iAP2 của VietMap.
   `SyntaxError` hoặc ghi NUL byte vào file. Viết file bằng công cụ Write, hoặc
   tránh hẳn backslash trong body heredoc.
 - Console là cp1252: đặt `PYTHONIOENCODING=utf-8` khi chạy script in tiếng Việt.
+  Lưu ý `python -I` **bỏ qua biến môi trường**, nên script nào in tiếng Việt thì
+  tự gọi `sys.stdout.reconfigure(encoding='utf-8')` (xem `check_rootfs.py`).
+- Muốn chạy phần Windows đang kẹt (`qemu-arm`, `m3-toolchain`, emu, test
+  sanitizer, test installer dưới BusyBox 1.19.2 của xe): làm theo
+  [docs/setup-linux.vi.md](docs/setup-linux.vi.md). Khuyến nghị WSL2 + Ubuntu
+  24.04 trên chính máy này, giữ Windows cho board C3 và Frida.
 
 ## Cập nhật phiên 22-10-2026 (lần 4): ĐÃ CÓ DẪN ĐƯỜNG THẬT TRÊN EMULATOR
 

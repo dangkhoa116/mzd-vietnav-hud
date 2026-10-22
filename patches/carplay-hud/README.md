@@ -166,8 +166,10 @@ Bản vá `nav.cpp` cũng đã được biên dịch sạch bằng `zig c++ -std
 ### Kiểm trên rootfs CMU thật (`check_rootfs.py`)
 
 Bộ `mzd-connect-emu` cần Linux x86_64 + `qemu-user` nên không chạy được trên
-máy Windows này. Nhưng **rootfs mà emu đó tiêu thụ thì đọc được**, và nó trả
-lời được phần lớn câu "shim có chạy nổi trên xe không":
+máy Windows này (muốn dựng Linux thì xem
+[docs/setup-linux.vi.md](../../docs/setup-linux.vi.md)). Nhưng **rootfs mà emu
+đó tiêu thụ thì đọc được**, và nó trả lời được phần lớn câu "shim có chạy nổi
+trên xe không":
 
 ```sh
 python patches/carplay-hud/check_rootfs.py --rootfs <rootfs đã giải nén>
