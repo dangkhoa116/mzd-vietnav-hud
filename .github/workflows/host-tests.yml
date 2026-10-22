@@ -1,0 +1,108 @@
+name: host-tests
+
+# Full host test matrix on Linux. The Windows dev box has no gcc/qemu/WSL,
+# so everything that needs a real Linux toolchain runs here:
+#   host-suite      - python unit tests incl. BlueZ contract tests (dbus)
+#   codec-cpp       - C++ codec + sanitizer tests and maneuver/road-fold tests
+#   installer-busybox - installer flow under BusyBox 1.19.2 built from source
+#                       (the car's version; the P0 gate from docs/emu-yeu-cau.md)
+#   firmware        - pinned Arduino build of the ESP32-C3 sketch
+#   emu-smoke       - host bridge build of dangkhoa116/mzd-connect-emu
+#
+# Firmware images, IPA/APK and the Mazda rootfs are never downloaded here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  host-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev dbus
+      - name: Install python deps
+        run: python3 -m pip install -r hud_emulator/requirements.txt
+      - name: Python unit tests
+        run: |
+          python3 -m unittest tests.test_hud_native tests.test_hud_native_transport \
+            tests.test_hud_native_usb tests.test_hud_protocol tests.test_hud_bluez \
+            tests.test_vmlhud_bridge tests.test_vmlhud_arrow tests.test_vmlhud_hud_out -v
+      - name: Script test suites
+        run: |
+          python3 bridge/vmlhud_frame_test.py
+          python3 bridge/vmlhud_nav_test.py
+          python3 bridge/vmlhud_vbs_test.py
+
+  codec-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+      - name: C++ maneuver and road-fold tests
+        run: make -C tests test test-carplay
+      - name: Codec sanitizer tests
+        run: python3 tests/test_esp32_hud.py -v
+
+  installer-busybox:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build BusyBox 1.19.2 (the car's version)
+        run: sh tests/build-busybox-1.19.sh "$RUNNER_TEMP/bb119"
+      - name: Installer tests under BusyBox ash
+        run: |
+          env -i HOME="$HOME" PATH="$RUNNER_TEMP/bb119/bin" \
+            BUSYBOX="$RUNNER_TEMP/bb119/bin/busybox" \
+            "$(command -v python3)" tests/test_installer.py
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Arduino data
+        uses: actions/cache@v4
+        with:
+          path: ~/.arduino15
+          key: arduino-esp32core-3.3.2
+      - name: Install arduino-cli and pinned deps
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.2 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install NimBLE-Arduino@2.3.7
+      - name: Build default firmware
+        run: |
+          arduino-cli compile --fqbn 'esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio' \
+            --build-path "$RUNNER_TEMP/default-build" emu/esp32-hud-emu/vmhud_emu
+      - name: Build extended firmware (scan diagnostic)
+        run: |
+          arduino-cli compile --fqbn 'esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio' \
+            --build-property 'compiler.cpp.extra_flags=-DCONFIG_BT_NIMBLE_EXT_ADV=1 -DCONFIG_BT_NIMBLE_MAX_EXT_ADV_INSTANCES=2' \
+            --build-property 'compiler.c.extra_flags=-DCONFIG_BT_NIMBLE_EXT_ADV=1 -DCONFIG_BT_NIMBLE_MAX_EXT_ADV_INSTANCES=2' \
+            --build-path "$RUNNER_TEMP/ext-build" emu/esp32-hud-emu/vmhud_emu
+
+  emu-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone mzd-connect-emu
+        run: git clone --depth 1 https://github.com/dangkhoa116/mzd-connect-emu.git emu
+      - name: Install host deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev pkg-config
+      - name: Build host bridge
+        run: bash emu/scripts/build.sh
+      - name: Smoke: prepare.py runs
+        run: python3 emu/scripts/prepare.py --help >/dev/null
