@@ -362,6 +362,59 @@ Cài đặt → Cài đặt thiết bị → HUD → Kết nối thiết bị.
 3. **Bắt API config của app** (proxy + CA trên điện thoại) xem màn HUD kéo
    cờ gì từ server trước khi quét.
 
+## ĐÃ CHỐT BẰNG FRIDA (22-10-2026, lần 5): app iOS CÓ quét, board ĐÃ ĐƯỢC LIỆT KÊ VÀ KẾT NỐI — giao dịch HUDInfo thành công
+
+Cài Frida không cần root dpkg: `apt-get download --allow-unauthenticated
+re.frida.server` → `dpkg-deb -x` → chạy binary extract **as mobile** với
+`-l 0.0.0.0:27043` (frida-server root sẵn có nghe localhost:27042;
+mobile-user server attach được app cùng UID 501). Hook **theo offset IMP**
+trong `vietmap_hud_sdk` (frida 17 không còn ObjC bridge toàn cục và
+`Module.findExportByName` đã bị bỏ — dùng `Module.getGlobalExportByName`
++ `objc_msgSend` thủ công bằng NativeFunction). Script:
+`work/tools/vml_hud_hook.js` (ngoài repo), offset trùng bảng disassembly
+ở trên.
+
+Quan sát trên iPhone 8 Plus (đăng nhập, app 3.4.3, board NimBLE 2.5.1
+extended + CYCLE đang xoay tên):
+
+1. **App quét BLE LIÊN TỤC ngay cả ở màn bản đồ** — `didDiscoverPeripheral`
+   fire mỗi ~5 giây cho mọi tên board xoay vòng (kể cả H50/H1X không chứa
+   "HUD" — hook bắt ở ENTRY, trước filter).
+2. **Màn scan gọi stop → start** (`startSearchingBluetooth` reset mảng
+   `allPeripheralofCBPeripheral`); cửa sổ quét ~10 giây. Delegate
+   `BTManager:didFinishSearchWithArray:` chỉ được gọi khi thiết bị được
+   **THÊM MỚI** vào mảng; discover lại cùng identifier chỉ REPLACE im lặng
+   (đúng disassembly: nhánh replace tại 0xc15c không gọi delegate).
+3. Khi tên đang active trong cửa sổ quét chứa "HUD" (`VIETMAP-HUD` đúng
+   lúc 14:36:01): **`didFinishSearchWithArray count=1` → board HIỆN trong
+   danh sách** ("VIETMAP-HUD — Không kết nối"). Các lần "list rỗng" trước
+   đó: trong 10 giây quét không có tên chứa "HUD" nào được phát hiện như
+   entry mới (chỉ H50/H1AS/H1X/H1N/null) — bộ lọc tên của SDK là cửa
+   duy nhất, đúng như disassembly.
+4. **Bấm dòng thiết bị → `connectDeviceWithPeripheral` → KẾT NỐI THẬT.**
+   App subscribe FFF1, gửi CMD 0x0E hai lần, board đáp
+   `MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2S,OBDV:0_1.0,SID:VMEMU0000001`
+   → **app chấp nhận và bắt đầu streaming** qua **FFF2 write / FFF1
+   notify (họ H1!)** dù MODEL:H50 — app iOS dùng họ FFF0 cho mọi HUD.
+5. **Dữ liệu app đẩy về board (log serial `out/cycle-trial-3.log`):**
+   - CMD 0x02 plen 2 `0000` — heartbeat tốc độ (0 km/h).
+   - CMD 0x00 plen 37 `FE FF FF FF FF 14 <UTF-8 "31° mây đen u ám"> 00…` —
+     **frame thời tiết/info**: tiền tố `FE` là marker dòng info (không phải
+     nav); decoder hiện giải nhầm thành variable1 — cần phân nhánh FE.
+   - CMD 0x01 plen 8 `01 86A0 00 00 00 00 00` — lặp ~1 Hz, nghi là
+     trạng thái/cấu hình (0x86A0=34464) — chưa đối chiếu SDK.
+   - CMD 0x0D plen 1 `FF` rồi `10` — truy vấn OBD; không có đáp ⟹ app hiện
+     hộp thoại "Không đọc được thông tin OBD… Ứng dụng sẽ dùng tốc độ GPS
+     thay cho tốc độ OBD" → bấm Đồng ý, app tiếp tục bình thường.
+6. **Câu hỏi permission-gate ĐÃ TRẢ LỜI theo hướng nhánh A**: không một
+   bước nào bị server chặn — app gửi dữ liệu cho SID "VMEMU0000001"
+   không hề tồn tại. (Chưa thấy app gọi API nào trong lúc kết nối;
+   diff cache `.c/` không có file mới.)
+
+Còn mở: bắt **nav thật** (bắt đầu tuyến trên app rồi đọc frame CMD 0x00/0x40
+variable2 với tên đường + direction); bảng direction↔mũi tên; hai byte đuôi
+layout fixed; FPS/nhiệp frame heartbeat–nav khi đang chạy tuyến.
+
 ## Cách lấy bằng chứng chạy thật (bước tiếp theo rẻ nhất)
 
 `flutter_blue_plus` ghi log có tiền tố `[FBP]`. Cắm tablet/điện thoại qua ADB
