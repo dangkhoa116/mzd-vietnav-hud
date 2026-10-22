@@ -6,7 +6,9 @@
 #define VN_MTU 23
 #define VN_FRAME_MAX 2048
 #define VN_QUEUE 16
-#define VN_NAME "VIETNAV HUD"
+/* Name proven against VIETMAP LIVE 3.4.3 on iOS: must contain "HUD".
+ * Must stay 11 bytes - the advertisement and GAP-name reads copy exactly 11. */
+#define VN_NAME "VIETMAP-HUD"
 enum vn_state { VN_OFF, VN_CONFIG, VN_ADVERTISING, VN_CONNECTED, VN_STOPPING, VN_DONE, VN_FAILED };
 
 struct vn_caps {

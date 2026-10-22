@@ -221,7 +221,7 @@ void vn_command_reply(struct vn_hud *v, unsigned op, unsigned status, uint64_t n
     v->stage++;
     if (v->stage == 4 && v->state == VN_CONFIG) {
         v->state = VN_ADVERTISING;
-        record(v, "VML advertising VIETNAV HUD", 0, 0);
+        record(v, "VML advertising " VN_NAME, 0, 0);
     }
 }
 
@@ -466,7 +466,11 @@ static void wire_frame(struct vn_hud *v, const unsigned char *p, unsigned n)
 {
     unsigned char sum[4], cmd;
     unsigned i;
-    static const unsigned char text[] = "MODEL:VIETNAV,HW:0,FW:0,PROTOCOL:2.0";
+    /* Exact identity the iOS app accepted on the ESP32-C3 trial (2026-10-22):
+     * PROTOCOL without the trailing "S" - "2.2.2S" forces the no-image CMD 0x00
+     * branch in insideSendCustomNavigation and the HUD would never get arrows. */
+    static const unsigned char text[] =
+        "MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,SID:VMEMU0000001";
     static const unsigned char zero_uid[16] = {0};
     vn_checksum(p, n - 8, default_uid, sum);
     for (i = 0; i < 4; i++)

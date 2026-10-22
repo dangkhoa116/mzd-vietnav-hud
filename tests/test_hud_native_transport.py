@@ -204,7 +204,7 @@ class NativeTransportTests(unittest.TestCase):
         self.assertNotIn(0x200c, ops)  # no TPMS scanner in this mode
         self.assertNotIn(0x200d, ops)  # no TPMS central connection
         self.assertEqual(decode(bytes(data), uid=bytes(16)).payload,
-                         b'MODEL:VIETNAV,HW:0,FW:0,PROTOCOL:2.0')
+                         b'MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,SID:VMEMU0000001')
         self.assertIn('VML FRAME CMD 00', log)
         self.assertIn('VML disconnected', log)
         records = list(capture.records(log.splitlines()))

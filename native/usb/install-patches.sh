@@ -63,6 +63,6 @@ if run arm "$MODE" --yes; then
     if [ "$MODE" = query ]; then
         say 'DA DAT LICH KIEM TRA\nRut USB, tat xe, mo cua.\nCho man hinh tat, doi them 30 giay.\nMo xe, doi 2 phut. Khoi dong lai xe,\ncam USB: KHAC > LUU LOG / KET NOI.'
     else
-        say 'DA DAT LICH KET NOI\nRut USB, tat/mo xe nhu buoc kiem tra.\nSau 60-90 giay, mo VietMap > HUD.\nTim VIETNAV HUD, bat dau dan duong.\nSau khi thu: KHAC > LUU LOG.'
+        say 'DA DAT LICH KET NOI\nRut USB, tat/mo xe nhu buoc kiem tra.\nSau 60-90 giay, mo VietMap > HUD.\nTim VIETMAP-HUD, bat dau dan duong.\nSau khi thu: KHAC > LUU LOG.'
     fi
 fi

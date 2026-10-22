@@ -13,15 +13,18 @@ thu log, huỷ lịch và gỡ; chỉ chạy HUD ở một lần khởi động 
 - Kiểm command bits 205/207/208/209 và state bits 2 (connectable advertising),
   7 (peripheral). Bản đầu chỉ nhận buffer LE riêng, ít nhất 27 byte/1 packet;
   chưa dùng chung pool ACL classic.
-- Quảng bá `VIETNAV HUD`, FFF0, ADV_IND, interval 100–150 ms. Không sửa tên
-  Bluetooth classic của xe.
+- Quảng bá `VIETMAP-HUD` (11 byte, đổi từ `VIETNAV HUD` cùng độ dài), FFF0,
+  ADV_IND, interval 100–150 ms. Không sửa tên Bluetooth classic của xe.
 - ATT server MTU 23: GAP/device name, GATT tĩnh, FFF0/FFF1–FFF4, CCCD;
   discovery, read/blob, write request/command, notify và ATT errors.
   Không bonding hoặc long write.
 - Ghép yêu cầu HUD mới, kiểm checksum mặc định, trả HUDInfo qua FFF1,
-  tối đa 20 byte/notify. Dùng timestamp từ yêu cầu và UID thử 16 byte zero,
-  danh tính `MODEL:VIETNAV,HW:0,FW:0,PROTOCOL:2.0`. Chưa xác nhận UID runtime,
-  quyền phía app hoặc model/protocol thử được app chấp nhận.
+  tối đa 20 byte/notify. Dùng timestamp từ yêu cầu và UID thử 16 byte zero.
+  Danh tính **đã được app iOS 3.4.3 chấp nhận trên emulator ESP32-C3 ngày
+  22-10-2026**: `MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,
+  SID:VMEMU0000001`. Lưu ý `PROTOCOL` **không** có chữ "S" cuối: `2.2.2S`
+  khiến app chỉ gửi CMD 0x00 không bao giờ gửi ảnh mũi tên CMD 0x40
+  (docs/hud-dart-layer-analysis.vi.md). Chưa xác nhận UID runtime.
 - Ghi BLE write của chính HUD thành `VML RX`. Tool Python đọc lại thành
   navigation/camera/heartbeat, kể cả legacy. Assembler bắt tay C chỉ xử lý
   khung mới, giới hạn 2048 byte; chưa xử lý ảnh/OTA lớn.

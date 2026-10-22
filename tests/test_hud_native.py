@@ -3,6 +3,7 @@ import ctypes as C
 from pathlib import Path
 import random
 import struct
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,10 +19,11 @@ class NativeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory(prefix='vietnav-native-')
         lib = Path(cls.work.name) / 'core.so'
-        subprocess.run(['gcc', '-std=c99', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
-                        '-fsanitize=undefined', '-fno-sanitize-recover=all', '-shared', '-fPIC',
-                        '-I', str(ROOT / 'native'), str(ROOT / 'native/hud_native.c'),
-                        str(ROOT / 'tests/native_driver.c'), '-o', str(lib)], check=True)
+        cc = ['gcc'] if shutil.which('gcc') else [sys.executable, '-m', 'ziglang', 'cc']
+        subprocess.run(cc + ['-std=c99', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
+                             '-fsanitize=undefined', '-fno-sanitize-recover=all', '-shared', '-fPIC',
+                             '-I', str(ROOT / 'native'), str(ROOT / 'native/hud_native.c'),
+                             str(ROOT / 'tests/native_driver.c'), '-o', str(lib)], check=True)
         cls.lib = C.CDLL(str(lib))
         cls.lib.test_caps.argtypes = [C.c_char_p, C.c_char_p, C.c_uint, C.c_uint, C.c_uint]
         cls.lib.test_start.argtypes = [C.c_int, C.c_ulonglong, C.c_uint]
@@ -33,7 +35,17 @@ class NativeTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.work.cleanup()
+        # Windows keeps the loaded DLL locked until the process exits; free it
+        # best-effort and tolerate a leftover tempdir rather than failing tests.
+        try:
+            import ctypes.wintypes
+            C.WinDLL('kernel32').FreeLibrary(cls.lib._handle)
+        except Exception:
+            pass
+        try:
+            cls.work.cleanup()
+        except OSError:
+            pass
 
     def setUp(self):
         self.lib.test_reset()
@@ -129,7 +141,7 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(params[-2:], b'\x07\0')
         self.assertEqual(ad[4], 20)
         self.assertEqual(ad[5:12], bytes.fromhex('0201060303f0ff'))
-        self.assertIn(b'VIETNAV HUD', ad)
+        self.assertIn(b'VIETMAP-HUD', ad)
         self.assertEqual(len(ad), 36)
         self.assertEqual(scan[4:], bytes(32))
         self.assertEqual(enable[4:], b'\1')
@@ -228,7 +240,7 @@ class NativeTests(unittest.TestCase):
     def test_mtu_read_blob_and_att_errors(self):
         self.connect()
         self.assertEqual(self.request(bytes.fromhex('020002')), bytes.fromhex('031700'))
-        self.assertEqual(self.request(bytes.fromhex('0a0300')), b'\x0bVIETNAV HUD')
+        self.assertEqual(self.request(bytes.fromhex('0a0300')), b'\x0bVIETMAP-HUD')
         self.assertEqual(self.request(bytes.fromhex('0c03000800')), b'\x0dHUD')
         for raw, err in (('0c03000c00', '010c030007'), ('0a0c00', '010a0c0002'),
                          ('0a0000', '010a000001'), ('040000ffff', '0104000001'),
@@ -254,7 +266,7 @@ class NativeTests(unittest.TestCase):
         frame = decode(data, uid=bytes(16))
         self.assertEqual(frame.command, 14)
         self.assertEqual(frame.timestamp, 1792584000)
-        self.assertEqual(frame.payload, b'MODEL:VIETNAV,HW:0,FW:0,PROTOCOL:2.0')
+        self.assertEqual(frame.payload, b'MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,SID:VMEMU0000001')
 
     def test_acl_credit_is_required_and_wrong_handle_cannot_release_it(self):
         self.connect()

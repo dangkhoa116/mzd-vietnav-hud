@@ -283,16 +283,26 @@ chuyện không, và lấy được những gì — thì đã có câu trả l�
 ### Việc tiếp theo ngay (thứ tự mới)
 
 1. ~~Đổi PROTOCOL~~ — **ĐÃ CHẠY VÀ THÀNH CÔNG trong phiên này.** Xem mục dưới.
-2. **Lấy mẫu khi xe chạy thật**: đứng yên thì `speed` luôn 0 và `current_road`
+2. **Profile đã được sync sang CMU-side (phiên 22-10 tối, muộn):**
+   `native/hud_native.{h,c}` + `hud_emulator` + kit USB đều đổi sang
+   `VIETMAP-HUD` / `MODEL:H50,PROTOCOL:2.2.2` (bỏ chữ S). Test native giờ chạy
+   được trên máy Windows không gcc bằng fallback `python -m ziglang cc`
+   (tests/test_hud_native.py tự chọn compiler; DLL lock khi dọn rác đã bỏ qua).
+   21 test native + 46 unittest + 36 frame + 115 nav PASS.
+3. **Đã có module ánh xạ nav→VBS**: `bridge/vmlhud_vbs.py` (+13 test, chạy cả
+   trên fixture capture thật). Nav + ArrowMatch → `Guidance` đúng trường
+   `VbsNaviHudDisplay`/`VbsNaviHudMsg2` (icon Mazda từ asset Mapbox, khoảng cách
+   met/km kiểu app, sync bit 1..7, xoá guidance khi khung nhàn rỗi). Còn thiếu
+   bên C: gọi thật `VBS_NAVI_SetHUDDisplayMsgReq`/`Msg2` từ daemon native —
+   xem oem/libjcivbsnaviclient.h trong checkout mazda-carplay-hud.
+4. **Lấy mẫu khi xe chạy thật**: đứng yên thì `speed` luôn 0 và `current_road`
    luôn rỗng. Mang board + điện thoại lên xe, chạy một tuyến ngắn có rẽ, xem
    `direction` có rời 0xFE không và hai trường kia được điền ra sao.
-3. **Nếu `direction` vẫn là 0xFE khi chạy**: chốt rằng HUD chỉ nhận được chữ, rồi
+5. **Nếu `direction` vẫn là 0xFE khi chạy**: chốt rằng HUD chỉ nhận được chữ, rồi
    quyết định — suy mũi tên từ văn bản/khoảng cách phía CMU, hoặc đào lớp Dart
    (Flutter AOT) để tìm chỗ gọi `sendCustomNavigationInformation…`.
-4. **CMD 0x09** (5 byte `00`, một lần lúc mở phiên) vẫn chưa rõ; 18 khung lẻ còn
+6. **CMD 0x09** (5 byte `00`, một lần lúc mở phiên) vẫn chưa rõ; 18 khung lẻ còn
    lại trong capture phần lớn là nhiễu serial lúc bắt tay.
-5. Sang giai đoạn CMU: daemon native ATT (`native/`) ăn theo profile đã được app
-   chấp nhận (MODEL:H50/PROTOCOL:2.2.2S qua FFF0); rồi nối `com.jci.vbs.navi`.
 
 Lưu ý thiết bị: helper `work/tools/iosmcp.py` nói chuyện thẳng với ios-mcp trên
 máy (`http://192.168.68.104:8090/mcp`) và **vẫn chạy được khi connector MCP của

@@ -110,8 +110,8 @@ class BluezTests(unittest.IsolatedAsyncioTestCase):
             bus.export('/org/bluez/hci0', adv)
             bus.export('/org/bluez/hci0', FakeAdapter())
             out = io.StringIO()
-            args = SimpleNamespace(adapter='hci0', name='VIETNAV HUD',
-                                   hud_info='MODEL:VIETNAV,HW:0,FW:0,PROTOCOL:2.0')
+            args = SimpleNamespace(adapter='hci0', name='VIETMAP-HUD',
+                                   hud_info='MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,SID:VMEMU0000001')
             task = asyncio.create_task(run(args, out))
             await asyncio.wait_for(adv.ready.wait(), timeout=4)
             self.assertEqual(len(gatt.objects), 5)
@@ -198,7 +198,7 @@ class BluezTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_old_reply_cannot_cross_reconnect(self):
         out = io.StringIO()
-        s = Session(out, 'MODEL:VIETNAV')
+        s = Session(out, 'MODEL:H50')
         options = {'device': Variant('o', '/phone')}
         s.receive(encode(14, b'\0'), options)
         old = await s.replies.get()

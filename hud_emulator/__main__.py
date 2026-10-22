@@ -18,10 +18,10 @@ def main():
     replay.add_argument('input', nargs='?', default='-', help='raw binary file; stdin uses one hex chunk per line')
     ble = sub.add_parser('ble', help='advertise on Linux BlueZ; requires dbus-next and BLE hardware')
     ble.add_argument('--adapter', default='hci0')
-    ble.add_argument('--name', default='VIETNAV HUD')
+    ble.add_argument('--name', default='VIETMAP-HUD')
     ble.add_argument('--output', default='-', help='JSONL capture, default stdout')
-    ble.add_argument('--hud-info', default='MODEL:VIETNAV,HW:0,FW:0,PROTOCOL:2.0',
-                     help='experimental HUDInfo payload; no real device identity by default')
+    ble.add_argument('--hud-info', default='MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,SID:VMEMU0000001',
+                     help='identity the iOS app accepted on 2026-10-22; PROTOCOL must NOT end in "S" or the app never sends arrow frames')
     ble.add_argument('--no-info-reply', action='store_true', help='receive/log only')
     args = parser.parse_args()
     if args.mode == 'decode':
