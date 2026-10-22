@@ -9,7 +9,10 @@
 #include "hud_codec.h"
 
 String g_name="VMHUD-EMU", g_model="H50", g_hw="1.0.0", g_fw="1.0.0";
-String g_protocol="2.2.2S", g_sid="VMEMU0000001";
+// PROTOCOL quyet dinh app iOS co gui anh mui ten hay khong: SDK bo anh khi chuoi
+// nay < "2.2.2" HOAC chua chu "S". Tra "2.2.2" thi app gui CMD 0x40 kem JPEG mui
+// ten; "2.2.2S" chi duoc CMD 0x00 toan chu. Xem docs/vmlhud-nav-payloads.md muc 10.
+String g_protocol="2.2.2", g_sid="VMEMU0000001";
 // A real HUD belongs to one device family and may carry manufacturer data.
 // Both are configurable so a phone-side filter can be probed without reflashing.
 String g_adv="BOTH", g_mfg="";

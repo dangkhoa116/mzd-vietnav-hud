@@ -294,10 +294,40 @@ Hook hai entry point tren thiet bi that (frida, `vietmap_hud_sdk` base
 - `setLastNavigationImageData:`/`lastNavigationImageData` **khong he duoc goi** -
   dung nhu du doan: nhanh "S" cat truoc khi toi do.
 
-**Hệ quả cho buoc tiep theo**: thu doi dap getHUDInfo sang `PROTOCOL:2.2.2`
-(bo chu "S") roi ket noi lai. Neu doc dung thi app se gui CMD 0x40 kem anh mui
-ten PNG - tuc la HUD Mazda co the co mui ten that, khong chi co chu. Chua chay
-duoc thi nghiem nay: cong COM3 dang bi tien trinh capture cua phien truoc giu.
+## 10.7 THI NGHIEM DA CHAY: doi `PROTOCOL:2.2.2` -> app gui MUI TEN THAT
+
+Chay ngay trong phien (22-10-2026, 15:25). Gui `PROTOCOL:2.2.2` qua CLI serial
+cua emulator, khoi dong lai app de no doc lai getHUDInfo, log
+`out/protocol-222-trial.log`. Ket qua **dung nhu du doan o 10.3.1**:
+
+- App doc dap moi: `MODEL:H50,HW:1.0.0,FW:1.0.0,PROTOCOL:2.2.2,OBDV:0_1.0,SID:VMEMU0000001`
+- App **chuyen han sang CMD `0x40` (variable2)** - truoc do chua tung thay khung nao.
+- Khung anh **la JPEG** (`FF D8 FF E0 … JFIF`), khong phai PNG: lop Dart dua PNG
+  744 byte cho SDK, SDK/ObjC ma hoa lai thanh JPEG truoc khi gui.
+- Xuat hien them cac CMD chua tung thay o nhanh "S": `0x0A`, `0x0B`, `0x10`,
+  `0x13`, `0x33`.
+
+Ba anh bat duoc (giai ma bang `decode_nav_variable2`, khong phai sua codec):
+
+| image_len | distance | next_road | Anh la gi |
+| --- | --- | --- | --- |
+| 2230 | `0xFFFFFFFF` | "" | icon nhan roi |
+| 2004 | `0xFFFFFFFF` | "30° mưa vừa" | icon thoi tiet (may mua) |
+| 2438 | 150 m | "Quốc Lộ 13" | **mui ten RE PHAI** - dung mui ten tren man app |
+
+Nhip gui dung nhu suy luan tu APK Android: **anh gui mot lan moi khi doi**, cac
+khung sau dung `image_len = 1` + `flag = 1` = "giu anh cu". Trong log: 3 khung co
+anh, 165 khung `(1, 1)`.
+
+**Day la loi giai cho mui ten tren HUD Mazda**: `direction` van luon `0xFE` va
+khong mang y nghia, nhung **anh mui ten JPEG thi co that va lay duoc** - chi can
+emulator/daemon tra `PROTOCOL` khong chua "S" va khong nho hon "2.2.2".
+
+Sketch C3 nay mac dinh `g_protocol = "2.2.2"`. Danh doi: bang PROTOCOL cua APK
+Android (muc 9) chon `W7/e` cho `2.2.2S` va `W7/d` cho `2.2.2`; day la nhanh
+Android, chua kiem lai sau thay doi nay - nhung nhanh Android dang khong dung
+duoc voi C3 (khong co Bluetooth Classic). Doi lai bang `PROTOCOL:2.2.2S` neu can
+thu lai nhanh cu.
 
 ### 10.4 Khung "het dan duong" = khung nhan roi
 

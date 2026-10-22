@@ -51,16 +51,30 @@ Bốn kết quả chốt được:
   gửi direction 0xFF + toàn 0, và SDK so direction với 0xFF để tắt NaviTimer).
   App không hề gọi hàm đó; `0xFE` là giá trị lớp Dart tự chọn.
 
+### ĐÃ LẤY ĐƯỢC MŨI TÊN THẬT (15:25) — đổi `PROTOCOL:2.2.2` là đủ
+
+Gửi `PROTOCOL:2.2.2` qua CLI serial rồi khởi động lại app để nó đọc lại
+getHUDInfo. Log: `out/protocol-222-trial.log`.
+
+- App **chuyển hẳn sang CMD `0x40` (variable2)** — trước đó chưa từng thấy khung nào.
+- Khung ảnh là **JPEG** (`FF D8 FF E0 … JFIF`), không phải PNG: lớp Dart đưa PNG
+  744 byte cho SDK, SDK mã hoá lại thành JPEG trước khi gửi.
+- Bắt được ba ảnh: icon nhàn rỗi, icon thời tiết (mây mưa), và **mũi tên RẼ PHẢI**
+  (2438 byte) đi kèm `dist=150m`, `next="Quốc Lộ 13"`, `25m27s`, `8253m` — khớp
+  đúng màn hình app. Ảnh gửi **một lần mỗi khi đổi**; 165 khung sau dùng
+  `image_len=1, flag=1` = "giữ ảnh cũ".
+- `decode_nav_variable2` có sẵn **giải mã đúng, không phải sửa codec**.
+- Sketch C3 nay đổi mặc định sang `g_protocol = "2.2.2"`. Đánh đổi: bảng PROTOCOL
+  của APK Android chọn `W7/e` cho `2.2.2S` và `W7/d` cho `2.2.2`; nhánh Android
+  chưa kiểm lại, nhưng nhánh đó vốn không dùng được với C3 (không có Classic).
+
+**Ý nghĩa**: `direction` vẫn luôn `0xFE` và vô nghĩa, nhưng **mũi tên thì lấy
+được** — HUD Mazda có thể hiện mũi tên thật, không chỉ chữ. Rủi ro lớn nhất của
+phần dẫn đường coi như đã gỡ.
+
 ### Việc tiếp theo ngay (thứ tự mới)
 
-1. **THÍ NGHIỆM ƯU TIÊN SỐ 1 — đổi `PROTOCOL:2.2.2S` thành `PROTOCOL:2.2.2`**
-   (bỏ chữ "S") rồi kết nối lại app và xem có CMD 0x40 kèm ảnh PNG mũi tên không.
-   Chưa chạy được trong phiên này vì **COM3 đang bị tiến trình capture của phiên
-   trước giữ** (một `python.exe`). Cách làm: dừng capture đó, mở COM3, gửi
-   `PROTOCOL:2.2.2` (rồi `RESET` nếu cần), chạy lại `capture_serial.py` ra file
-   mới, và trong app ngắt/kết nối lại HUD để nó đọc getHUDInfo mới.
-   Nếu thành công thì HUD Mazda có mũi tên thật chứ không chỉ có chữ; nếu thất
-   bại thì trả lại `PROTOCOL:2.2.2S`.
+1. ~~Đổi PROTOCOL~~ — **ĐÃ CHẠY VÀ THÀNH CÔNG trong phiên này.** Xem mục dưới.
 2. **Lấy mẫu khi xe chạy thật**: đứng yên thì `speed` luôn 0 và `current_road`
    luôn rỗng. Mang board + điện thoại lên xe, chạy một tuyến ngắn có rẽ, xem
    `direction` có rời 0xFE không và hai trường kia được điền ra sao.

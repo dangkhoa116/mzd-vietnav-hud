@@ -150,5 +150,26 @@ for hexs, dist, nxt, h, m, s, rem, note in LIVE:
     # khac nhau (re phai / co dich) va ca khi khong dan duong.
     check("live %s direction 0xFE" % note, info.direction == 0xFE)
 
+
+# --- Fixture that: CMD 0x40 variable2 sau khi emulator tra PROTOCOL:2.2.2 ---
+# App gui anh mui ten JPEG MOT lan (image_len = do dai JPEG), roi cac khung sau
+# dung image_len=1 + flag=1 = "giu anh cu". Xem docs/vmlhud-nav-payloads.md muc 10.7.
+LIVE_V2 = [
+    ("FE0000000101000000960E5175E1BB9163204CE1BB99203133000000191B0000203D0000",
+     150, "Quốc Lộ 13", 0, 25, 27, 8253, 0, "giu anh cu, dang dan duong"),
+    ("FE0000000101FFFFFFFF0F3330C2B0206DC6B0612076E1BBAB610000000000000000000028",
+     0xFFFFFFFF, "30° mưa vừa", 0, 0, 0, 0, 40, "nhan roi, speed 40 tu GPS"),
+]
+for hexs, dist, nxt, h, m, sec, rem, spd, note in LIVE_V2:
+    info = N.decode_nav(bytes.fromhex(hexs))
+    check("live v2 %s layout" % note, info.layout == "variable2")
+    check("live v2 %s dist" % note, info.distance_m == dist)
+    check("live v2 %s next_road" % note, info.next_road == nxt)
+    check("live v2 %s time" % note,
+          (info.remain_hours, info.remain_minutes, info.remain_time_third_raw) == (h, m, sec))
+    check("live v2 %s remain_dist" % note, info.remain_dist_m == rem)
+    check("live v2 %s speed" % note, info.speed_kmh == spd)
+    check("live v2 %s direction 0xFE" % note, info.direction == 0xFE)
+
 print("RESULT: %d ok, %d fail" % (ok, fail))
 sys.exit(1 if fail else 0)
