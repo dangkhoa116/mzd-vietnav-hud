@@ -254,9 +254,67 @@ trên một iPhone khác có Dynamic Island, cũng đã đăng nhập — nên �
    giá trị cần phát.
 
 Lưu ý mẫu hình chung: trên **cả hai** nền tảng, danh sách HUD của app **luôn
-rỗng**, kể cả khi Android đã phát hiện 53 thiết bị có tên. Chưa loại trừ được
+trống**, kể cả khi Android đã phát hiện 53 thiết bị có tên. Chưa loại trừ được
 khả năng tính năng HUD bị chặn bởi một điều kiện khác (tài khoản, gói dịch vụ,
 hoặc đăng ký thiết bị) trước cả bước lọc.
+
+## ĐÃ CHỐT BẰNG DISASSEMBLY (22-10-2026, lần 3): toàn bộ chuỗi native iOS không lọc gì ngoài tên chứa "HUD"
+
+Disassembly ARM64 `vietmap_hud_sdk.framework` (IPA 3.4.3, SHA-256 ở đầu tài
+liệu SDK; địa chỉ file offset của slice arm64 đầu tiên):
+
+1. **Quét không lọc service.** `DJBTManager.startSearchingBluetooth` @
+   `0x4254` gọi `[centraManager scanForPeripheralsWithServices:nil
+   options:nil]` (`x2=0, x3=0` tại `0x429c-0x42a4`). Không có danh sách
+   CBUUID nào ở tầng quét. Giả thuyết "sai họ service trong advertisement"
+   chết lần thứ hai bằng chứng độc lập.
+2. **Filter duy nhất ở `didDiscoverPeripheral`** @ `0xbeb8`:
+   ```objc
+   if (peripheral.name == nil) return;                            // 0xbf0c
+   if (![name.uppercaseString containsString:@"HUD"]) return;     // 0xbf34-0xbf54
+   // tạo DJPeripheral{peripheral, RSSI}, dedup theo identifier.UUIDString,
+   // thay thế entry cũ rồi gọi delegate BTManager:didFinishSearchWithArray:
+   ```
+3. **Delegate không lọc thêm.** Lớp Swift
+   `_TtC15vietmap_hud_sdk14DJBTSDKHandler` implement
+   `BTManager:didFinishSearchWithArray:` @ `0x183ac` (method-list entry
+   `0x2f3e8`): map mảng `DJPeripheral` rồi forward nguyên mảng về Dart qua
+   event `didFinishSearchWith…` với JSON `{"peripheral": [...]}` (cstring
+   `0x314c0`). Không có check model/UUID/manufacturer nào.
+4. **Dart không thể lọc theo manufacturer data trên iOS.** `DJPeripheral`
+   chỉ giữ `{CBPeripheral, RSSI}` ( setter tại `0xbf6c`/`0xbf7c`);
+   advertisementData nhận trong callback **không được lưu lại**. Mỗi phần tử
+   JSON chỉ có thể mang name/rssi/identifier. **Giả thuyết số 1 ở mục
+   "Giả thuyết còn lại" (thiếu manufacturer data) bị bác bỏ hoàn toàn** —
+   không chỉ ở ADV variants đã thử mà về mặt cấu trúc dữ liệu.
+5. **Chuỗi debug để kiểm runtime trên máy jailbreak:** framework in
+   `'Peripheral count: '` (`0x310e0`), `'foundPeripheral: '` (`0x31100`) và
+   `'Main ==== update device found '` (`0x314a0`) khi scan trả kết quả.
+   Trên iPhone jailbreak, mở Console/os_log rồi vào màn HUD: có các dòng
+   này ⟹ app đang quét và SDK trả kết quả; không có ⟹ app không gọi scan
+   (gate nằm ở Dart/feature flag).
+
+### Hệ quả định hướng lại điều tra
+
+- **Lý thuyết thống nhất mới (mạnh nhất):** tầng Dart lọc tên chặt hơn
+  `contains("HUD")`. Nó giải thích **cùng một lúc** việc `VMHUD-EMU` và
+  `HUD-H50` không hiện trên iPhone (SDK đã chắc chắn chuyển chúng về Dart)
+  **và** trên Android. Kết luận "Android loại thiết bị LE-only" ở trên
+  thành **chưa chắc chắn**: có thể tên mới là nguyên nhân duy nhất, khi đó
+  tablet Samsung cũng có thể hiện board dù board chỉ có BLE.
+- Các hằng số tên trong Dart iOS (`'HUD-'`, `'HUD_'`, `'vmHUD'`, `'VIETMAP'`,
+  model `H1AS/H1N/H1X/H2AS/H6/H50`, chuỗi toString `'HUD_V3(BLE)'` ở file
+  offset `0x24c7140` của App.framework) vẫn là ứng viên cho bộ lọc; Facebook
+  group Vietmap nói tên thiết bị hiện dạng "VIETMAP-HUD".
+- **Thí nghiệm mới (rẻ, không cần jailbreak):** firmware C3 có chế độ
+  `CYCLE:1` — xoay tên `VIETMAP-HUD, vmHUD, VIETMAP_HUD, HUD_V3, H50, H1AS,
+  H1X, H1N` mỗi 5 giây trong lúc app đang mở màn quét. Xem
+  [emu/esp32-hud-emu/README.vi.md](../emu/esp32-hud-emu/README.vi.md). Đã
+  verify trên air từ PC bằng bleak: cả 5 tên đầu hiện xoay vòng đúng.
+  - Một tên nào đó hiện trong app ⟹ chốt được tên Dart chấp nhận ⟹ đặt
+    tên cố định, làm tiếp kết nối/HUDInfo/nav.
+  - Không tên nào hiện sau ≥2 vòng trên cả hai máy ⟹ bộ lọc tên không phải
+    nguyên nhân; ưu tiên bắt os_log trên iPhone jailbreak (mục 5 trên).
 
 ## Cách lấy bằng chứng chạy thật (bước tiếp theo rẻ nhất)
 
