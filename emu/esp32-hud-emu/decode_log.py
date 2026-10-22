@@ -52,8 +52,14 @@ def decode_lines(lines):
                                  remaining_time_third_raw=value.remain_time_third_raw,speed_raw=value.speed_kmh)
                 elif frame['cmd']==14:
                     event.update(type='hud_info_request' if payload==b'\0' else 'hud_info',text=payload.decode('utf-8','replace'))
-                elif frame['cmd']==1 and len(payload)==4:
-                    event.update(type='camera',camera_type_raw=payload[0],distance_m=int.from_bytes(payload[1:3],'big'),speed_limit_raw=payload[3])
+                elif frame['cmd']==1 and len(payload) in (4,8):
+                    # sendCameraInformation ghi 1 o; sendMultipleCameraInformation
+                    # ghi toi da 2 o (csel tai 0x5d58), moi o 4 byte:
+                    # [type u8, khoang cach u16be, gioi han toc do u8].
+                    slots=[{'camera_type_raw':payload[i],
+                            'distance_m':int.from_bytes(payload[i+1:i+3],'big'),
+                            'speed_limit_raw':payload[i+3]} for i in range(0,len(payload),4)]
+                    event.update(type='camera',cameras=slots,**slots[0])
                 elif frame['cmd']==2 and len(payload) in (1,2):
                     event.update(type='heartbeat',speed_raw=int.from_bytes(payload,'big'))
                 else:

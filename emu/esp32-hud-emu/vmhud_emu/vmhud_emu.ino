@@ -89,8 +89,12 @@ void onFrame(const vmhud::Frame &frame, void *user) {
                   nav.minutes,nav.timeThird,(unsigned)nav.remainingDistance,nav.speed);
     // Third time byte = seconds: Android W7/e tag 5 writes total%60 and two live
     // iOS 3.4.3 samples matched the ETA on screen (25m38s, 37m52s).
-  } else if (frame.command==1 && frame.size==4) {
-    Serial.printf("[CAM] type_raw=%u dist=%um limit_raw=%u\n",frame.payload[0],vmhud::be16(frame.payload+1),frame.payload[3]);
+  } else if (frame.command==1 && (frame.size==4 || frame.size==8)) {
+    // sendCameraInformation ghi mot o; sendMultipleCameraInformation ghi toi da
+    // hai o, moi o 4 byte: type u8, khoang cach u16be, gioi han toc do u8.
+    for (size_t i=0;i<frame.size;i+=4)
+      Serial.printf("[CAM] slot=%u type_raw=%u dist=%um limit_raw=%u\n",(unsigned)(i/4),
+                    frame.payload[i],vmhud::be16(frame.payload+i+1),frame.payload[i+3]);
   } else if (frame.command==2 && (frame.size==1 || frame.size==2)) {
     Serial.printf("[HB ] speed_raw=%u\n",frame.size==1?frame.payload[0]:vmhud::be16(frame.payload));
   }

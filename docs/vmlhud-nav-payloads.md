@@ -241,10 +241,28 @@ khi mui ten tren man hinh app khac han nhau:
 
 Nghia la **khong the dung CMD 0x00 cua iOS 3.4.3 de suy ra mui ten**. Tren
 Android, `Ma/b.java` cho thay Dart gui kem `imageBase64` (anh mui ten da render)
-va co co `isV2`; duong variable2/CMD 0x40 moi mang ca `direction` lan anh.
-Chua biet dieu kien nao khien nhanh iOS chuyen sang CMD 0x40 - day la cau hoi
-mo quan trong nhat cho buoc HUD Mazda, vi thieu no thi HUD chi co chu, khong co
-mui ten. **Khong** ket luan 0xFE = "re phai".
+va co co `isV2`. **Khong** ket luan 0xFE = "re phai".
+
+Hai moc tinh giup doc ket qua nay (disassembly `vietmap_hud_sdk.framework`):
+
+- `sendEndNavigationInformation` (0x4b4c) goi
+  `sendNavigationInformationWithDirection:` voi **direction = 0xFF**, distance 0,
+  ten duong rong, duoi toan 0; va nhanh 0x4e44 so `direction` voi `0xFF` de tat
+  `NaviTimer`. Tuc la **0xFF moi la sentinel "het dan duong" cua SDK**, va `0xFE`
+  la gia tri do lop Dart tu chon - app khong he goi `sendEndNavigationInformation`
+  trong ca phien.
+- **CMD 0x40 chi phat ra tu dung mot cho**: trong
+  `insedeSendCustomNavigationInformationWithDirection:andDirectionImage:…`
+  (0x4bb4), tren nhanh ma `directionImage` moi **bang** `lastNavigationImageData`
+  da luu (`isEqualToData:` tai 0x4d88, nhanh bang di tiep toi `sendParamData:andCMD:`
+  voi `w3=0x40` tai 0x4e14). Nhanh khac bang se `setLastNavigationImageData:` roi
+  goi `sendNavigationInformationWithDirection:` = CMD 0x00.
+
+Hệ quả thực tế: **doi `MODEL`/`PROTOCOL`/`HW`/`FW` trong dap getHUDInfo se KHONG
+lam iOS chuyen sang CMD 0x40.** Viec chon entry point (`sendCustomNavigation…`
+co anh mui ten, hay `sendNavigation…` khong anh) nam **tren** SDK, o lop Dart,
+truoc khi bat ky truong nao cua HUDInfo duoc doc. Emulator khong co don bay nao
+o day - muon co mui ten phai tac dong vao lop Dart hoac chap nhan HUD chi co chu.
 
 ### 10.4 Khung "het dan duong" = khung nhan roi
 
@@ -270,9 +288,23 @@ luan u16be km/h o muc 7 (GPS fallback bat len mot nhip roi ve 0 vi xe dung yen).
 
 | CMD | plen | Payload quan sat | Ghi chu |
 | --- | --- | --- | --- |
-| `0x01` | 8 | `0186A00000000000` (2.920 khung, ~1 Hz, bat bien) | Codec hien chi nhan dang CMD 1 **4 byte** (camera/bien bao). Ban iOS 8 byte chua giai duoc; `01 86 A0` = 100000 co the la "khong co camera trong 100 km", chua xac nhan. |
+| `0x01` | 8 | `0186A00000000000` (~1 Hz, bat bien) | **Da giai ma**: xem duoi |
 | `0x09` | 5 | `0000000000` (dung 1 khung, luc bat dau phien) | Chua ro |
 | `0x0D` | 1 | `FF` (2 khung) | OBD query, khop ghi nhan truoc do |
+
+**CMD 0x01 8 byte = hai o camera.** `sendCameraInformationWithType:andDistance:andLimitSpeed:`
+(0x5a90) ghi **mot** o 4 byte `[type u8, khoang_cach u16be, gioi_han_toc_do u8]`
+roi gui CMD 1. `sendMultipleCameraInformationWithTypeArray:…` (0x5c08) ghi cung
+dinh dang nhung lap nhieu o, **toi da 2** (`csel w22, w8, w23, hi` voi `w8=2` tai
+0x5d58), nen payload dai 4 hoac 8 byte. Khung that giai ra:
+
+| O | type | khoang cach | gioi han |
+| --- | --- | --- | --- |
+| 0 | `0x01` | `0x86A0` = 34464 m | 0 |
+| 1 | 0 | 0 | 0 (o trong) |
+
+34464 = **100000 mod 65536**: lop tren gui 100 km lam gia tri "khong co camera
+phia truoc" roi bi cat con 16 bit. `decode_log.py` va sketch C3 nay doc ca hai o.
 
 Khong suy doan y nghia vao codec khi chua co bang chung; moi khung tren van
 duoc giu nguyen hex trong capture.

@@ -28,17 +28,34 @@ Bốn kết quả chốt được:
    `0xFFFFFFFF` và toàn bộ đuôi về 0 (trường `next_road` lúc đó mang chuỗi thời
    tiết). Đây chính là tín hiệu "xoá guidance" cho phía CMU.
 
+### Đã truy tiếp trong cùng phiên (disassembly SDK iOS)
+
+- **CMD 0x01 8 byte đã giải mã**: là **hai ô camera**, mỗi ô 4 byte
+  `[type, khoảng cách u16be, giới hạn tốc độ]` (`sendMultipleCameraInformation…`
+  giới hạn đúng 2 ô). Giá trị thật: ô 0 = type 1, 34464 m, không giới hạn — và
+  34464 = 100000 mod 65536, tức lớp trên gửi "100 km = không có camera" rồi bị
+  cắt còn 16 bit. `decode_log.py` và sketch C3 đã đọc cả hai ô; số khung chưa
+  giải mã trong capture rơi từ 2.833 xuống 18.
+- **Không có đòn bẩy nào từ phía emulator để ép CMD 0x40**: CMD 0x40 chỉ phát ra
+  từ một chỗ duy nhất trong SDK, nhánh mà `directionImage` mới trùng
+  `lastNavigationImageData`. Việc chọn entry point (có ảnh mũi tên hay không)
+  nằm **trên** SDK, ở lớp Dart, trước khi bất kỳ trường HUDInfo nào được đọc.
+  **Đừng mất thời gian đổi MODEL/PROTOCOL/HW/FW để săn CMD 0x40.**
+- **0xFF mới là sentinel "hết dẫn đường" của SDK** (`sendEndNavigationInformation`
+  gửi direction 0xFF + toàn 0, và SDK so direction với 0xFF để tắt NaviTimer).
+  App không hề gọi hàm đó; `0xFE` là giá trị lớp Dart tự chọn.
+
 ### Việc tiếp theo ngay (thứ tự mới)
 
-1. **Truy nhánh CMD 0x40 trên iOS**: đọc hai caller 0x4ddc/0x52ac trong
-   `vietmap_hud_sdk.framework` để tìm điều kiện chọn `SimplifyNavigationInformationData`;
-   thử đổi `MODEL`/`PROTOCOL`/`HW`/`FW` trong đáp getHUDInfo của emulator rồi
-   bắt lại. Có CMD 0x40 là có `direction` + ảnh mũi tên JPEG.
-2. **Giải mã CMD 0x01 8 byte** (`0186A00000000000`, ~1 Hz, bất biến khi xe
-   đứng): codec hiện chỉ nhận dạng bản 4 byte (camera/biển báo).
-3. **Lấy mẫu khi xe chạy thật**: chỉ khi di chuyển mới biết `speed` và
-   `current_road` (luôn rỗng khi đứng yên) được điền ra sao, và `direction` có
-   đổi không. Mang board + điện thoại lên xe, chạy một tuyến ngắn có rẽ.
+1. **Lấy mẫu khi xe chạy thật**: đứng yên thì `speed` luôn 0 và `current_road`
+   luôn rỗng. Mang board + điện thoại lên xe, chạy một tuyến ngắn có rẽ, xem
+   `direction` có rời 0xFE không và hai trường kia được điền ra sao. Đây là thí
+   nghiệm duy nhất còn có thể đổi kết luận về mũi tên.
+2. **Nếu `direction` vẫn là 0xFE khi chạy**: chốt rằng HUD chỉ nhận được chữ, rồi
+   quyết định — suy mũi tên từ văn bản/khoảng cách phía CMU, hoặc đào lớp Dart
+   (Flutter AOT) để tìm chỗ gọi `sendCustomNavigationInformation…`.
+3. **CMD 0x09** (5 byte `00`, một lần lúc mở phiên) vẫn chưa rõ; 18 khung lẻ còn
+   lại trong capture phần lớn là nhiễu serial lúc bắt tay.
 4. Sang giai đoạn CMU: daemon native ATT (`native/`) ăn theo profile đã được app
    chấp nhận (MODEL:H50/PROTOCOL:2.2.2S qua FFF0); rồi nối `com.jci.vbs.navi`.
 
