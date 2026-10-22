@@ -415,3 +415,59 @@ module tu cache van tay ra `out/arrow-fingerprints.json` (da bi git ignore).
 
 Con lai de len duoc HUD zin: anh xa `(maneuver, modifier)` -> ma mui ten cua
 `com.jci.vbs.navi`, va bom vao MQ do. Bang ma VBS chua duoc kiem trong repo nay.
+
+## 10.9 Tu khung VietMap ra dung hai struct HUD zin doc
+
+Dau ra cua HUD zin **khong phai nghi van nua**: ban CarPlay->HUD trong
+`repos/mazda-carplay-hud` da chay that tren CMU150, va chu xe xac nhan dan duong
+Google Maps qua Android Auto cung len HUD binh thuong. Nghia la duong ong
+`com.jci.vbs.navi` -> HUD da duoc chung minh; phan con lai chi la **bom dung noi
+dung vao do**.
+
+Hai struct (tu `oem/libjcivbsnaviclient.h`, doi chieu voi
+`VBS_NAVI_HUD_Display_s_t_pack`):
+
+```c
+VbsNaviHudDisplay { u32 nextManeuverInfo; u16 distanceValue; u8 distanceUnit;
+                    u16 displaySpeedLimit; u8 displaySpeedUnit; u8 text_ID3 }
+VbsNaviHudMsg2    { const char *guidancePointName; u8 syncBit }
+```
+
+`bridge/vmlhud_hud_out.py` dung noi dung hai struct do tu mot khung VietMap da
+giai ma. Bang ma mui ten va cong thuc icon vong xuyen duoc **soi guong nguyen
+ven** tu `hud_send.cpp` (bang do da kiem truc tiep tren HUD that), khong tu dat
+lai so.
+
+Quy uoc da chot:
+
+- `nextManeuverInfo`: ma mui ten cua HUD ECU (1=thang, 2=trai, 3=phai, 4/5=cheo,
+  9/11=gap, 10/13=quay dau, 7/30=ra nhanh, 14/15=re nhanh, 16/17=nhap lan,
+  8/33/34=diem den, 12/35/36=co xuat phat, 37..48=vong xuyen RHT).
+- `distanceValue` la gia tri **nhan 10** theo don vi da chon (HUD tu dat dau
+  phay): duoi 1 km dung met, tu 1 km dung kilomet - giong cach Google Maps hien.
+  Clamp ve `0xFFFF` de mot diem re rat xa khong bi tran va thanh so be.
+- Vong xuyen: VietMap khong gui goc thoat, chi gui mot trong cac hinh
+  `roundabout_*`, nen goc duoc uoc luong tu modifier (thang=0, phai=+90,
+  trai=270...). Day la do phan giai toi da lay duoc tu phia app.
+- Khi mui ten khop **yeu** (vd khung mang icon thoi tiet chu khong phai mui
+  ten), icon roi ve `HUD_STRAIGHT` thay vi doan bua.
+- Khung "het dan duong" (`distance == 0xFFFFFFFF`) -> `nextManeuverInfo = 0`,
+  don vi 0, va **khong** day chuoi thoi tiet trong `next_road` len HUD nhu ten
+  duong.
+- `text_ID3` / `syncBit` phai doi khi mui ten **khong** doi thi HUD moi ve lai
+  ten duong (xoay 1..7), giong co che cua ban CarPlay.
+
+Doi chieu thu tren chinh capture that:
+
+```sh
+python bridge/vmlhud_hud_out.py out/protocol-222-trial.log
+HUD: icon=1   150.0 m   Quốc Lộ 13
+HUD: (xoa guidance)
+HUD: icon=3   150.0 m   Quốc Lộ 13   [end_of_road/right]
+```
+
+Khung dau icon=1 vi anh mui ten chua toi (app gui anh MOT lan roi cac khung sau
+"giu anh cu"); sau khi co anh thi icon thanh 3 = re phai. Day dung la thu HUD se
+hien. Con lai la viec cua daemon tren xe: goi
+`VBS_NAVI_SetHUDDisplayMsgReq` / `VBS_NAVI_TMC_SetHUD_Display_Msg2` voi dung hai
+struct nay.
