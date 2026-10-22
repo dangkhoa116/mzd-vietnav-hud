@@ -59,7 +59,7 @@ for name, body in [("fixed", fx), ("variable1", v1), ("variable2", v2)]:
     check("%s distance" % name, info.distance_m == 350)
     check("%s next_road" % name, info.next_road == "Le Dai Hanh")
     check("%s current_road" % name, info.current_road == "Nguyen Van Linh")
-    check("%s remain_time" % name, info.remain_time_s == (1234 if name == 'fixed' else None))
+    check("%s remain_time" % name, info.remain_time_s == 1234)
     check("%s raw time" % name, (info.remain_hours, info.remain_minutes, info.remain_time_third_raw) == (0,20,34))
     check("%s remain_dist" % name, info.remain_dist_m == 5678)
     check("%s speed" % name, info.speed_kmh == 61)
@@ -75,7 +75,7 @@ for name, body in [("fixed", N.build_nav_fixed(nav_vn)),
     info = N.decode_nav(body)
     check("%s VN next_road" % name, info.next_road == "Phố đi bộ")
     check("%s VN current_road" % name, info.current_road == "Đường Nguyễn Huệ")
-    check("%s VN remain_time" % name, info.remain_time_s == (3661 if name == 'fixed' else None))
+    check("%s VN remain_time" % name, info.remain_time_s == 3661)
 
 # --- ten duong qua dai: fixed cat 0x50, variable cat 255 ---
 long_road = "X" * 300
@@ -94,7 +94,7 @@ check("v2+anh direction", info.direction == 12)
 check("v2+anh distance", info.distance_m == 350)
 check("v2+anh next_road", info.next_road == "Le Dai Hanh")
 check("v2+anh current_road", info.current_road == "Nguyen Van Linh")
-check("v2+anh remain", info.remain_time_s is None and info.remain_time_third_raw == 34 and info.remain_dist_m == 5678)
+check("v2+anh remain", info.remain_time_s == 1234 and info.remain_time_third_raw == 34 and info.remain_dist_m == 5678)
 check("v2+anh speed", info.speed_kmh == 61)
 info = N.decode_nav(v2img)
 check("v2+anh auto-detect", info.layout == "variable2")
@@ -118,6 +118,37 @@ for bad in (b"", b"\x01", b"\x00" * 3):
         check("payload rac %r tu choi" % bad, False)
     except ValueError:
         check("payload rac %r tu choi" % bad, True)
+
+# ---------------------------------------------------------------------------
+# Fixture THAT: payload CMD 0x00 do VIETMAP LIVE 3.4.3 (iOS) gui cho emulator
+# ESP32-C3 ngay 22-10-2026, doc tu out/cycle-trial-3.log. Moi mau da doi chieu
+# voi man hinh app tai thoi diem bat (xem docs/vmlhud-nav-payloads.md muc 10).
+# ---------------------------------------------------------------------------
+LIVE = [
+    # (hex payload, dist_m, next_road, h, m, s, remain_m, ghi chu man hinh app)
+    ("FE000000960E5175E1BB9163204CE1BB9920313300000019260000203D0000",
+     150, "Quốc Lộ 13", 0, 25, 38, 8253, "re phai vao QL13; app hien 25p / 8.3km"),
+    ("FE000000960E5175E1BB9163204CE1BB9920313300000025340000376D0000",
+     150, "Quốc Lộ 13", 0, 37, 52, 14189, "cung khung re phai; app hien 37p / 14.2km"),
+    ("FE0000001E10C490C6B0E1BB9D6E672053E1BB9120370000000100000003E80000",
+     30, "Đường Số 7", 0, 1, 0, 1000, "diem den 47m, icon la co dich khong phai mui ten"),
+    ("FEFFFFFFFF143331C2B0206DC3A27920C491656E207520C3A16D0000000000000000000000",
+     0xFFFFFFFF, "31° mây đen u ám", 0, 0, 0, 0, "khung nhan roi: dist=-1, duoi toan 0"),
+]
+for hexs, dist, nxt, h, m, s, rem, note in LIVE:
+    info = N.decode_nav(bytes.fromhex(hexs))
+    check("live %s layout" % note, info.layout == "variable1")
+    check("live %s dist" % note, info.distance_m == dist)
+    check("live %s next_road" % note, info.next_road == nxt)
+    check("live %s current_road rong" % note, info.current_road == "")
+    check("live %s time" % note,
+          (info.remain_hours, info.remain_minutes, info.remain_time_third_raw) == (h, m, s))
+    check("live %s remain_time_s" % note, info.remain_time_s == h * 3600 + m * 60 + s)
+    check("live %s remain_dist" % note, info.remain_dist_m == rem)
+    check("live %s speed" % note, info.speed_kmh == 0)
+    # Moi khung thuc te deu co direction = 0xFE, ke ca khi mui ten tren app
+    # khac nhau (re phai / co dich) va ca khi khong dan duong.
+    check("live %s direction 0xFE" % note, info.direction == 0xFE)
 
 print("RESULT: %d ok, %d fail" % (ok, fail))
 sys.exit(1 if fail else 0)

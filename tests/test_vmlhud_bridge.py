@@ -49,10 +49,21 @@ class BridgeRegressionTests(unittest.TestCase):
         with self.assertRaises(ValueError):nav.decode_nav_variable(b'\0'*5+b'\xff'+b'\0'*20)
         with self.assertRaises(ValueError):nav.decode_nav_variable2(b'\0'+b'\xff'*4+b'\0'*20)
 
-    def test_variable_time_preserves_unknown_third_byte(self):
+    def test_variable_time_third_byte_is_seconds_and_round_trips(self):
+        # Byte thu ba cua duoi variable la GIAY: builder Android W7/e tag 5 ghi
+        # total % 60, va hai mau that tu iOS 3.4.3 khop ETA tren man hinh app
+        # (25p38s va 37p52s). Xem docs/vmlhud-nav-payloads.md muc 10.
+        payload=b'\x08'+struct.pack('>I',300)+b'\0\0'+bytes.fromhex('000102250000303900 32'.replace(' ',''))
+        value=nav.decode_nav(payload,cmd=0,protocol='new')
+        self.assertEqual((value.remain_hours,value.remain_minutes,value.remain_time_third_raw),(1,2,37))
+        self.assertEqual(value.remain_time_s,1*3600+2*60+37)
+        self.assertEqual(nav.build_nav_variable(value),payload)
+
+    def test_variable_time_out_of_range_third_byte_round_trips_unchanged(self):
+        # Byte thu ba >59 chua tung thay tren song; builder van phai tra lai
+        # dung byte goc thay vi chuan hoa sang 1h03m01s.
         payload=b'\x08'+struct.pack('>I',300)+b'\0\0'+bytes.fromhex('0001023d000030390032')
         value=nav.decode_nav(payload,cmd=0,protocol='new')
-        self.assertIsNone(value.remain_time_s)
         self.assertEqual(value.remain_time_third_raw,61)
         self.assertEqual(nav.build_nav_variable(value),payload)
 

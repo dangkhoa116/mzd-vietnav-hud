@@ -4,6 +4,49 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## Cập nhật phiên 22-10-2026 (lần 4): ĐÃ CÓ DẪN ĐƯỜNG THẬT TRÊN EMULATOR
+
+Mục tiêu số 1 của bàn giao trước đã xong. App VIETMAP LIVE 3.4.3 trên iPhone
+**streaming dẫn đường thật** cho emulator ESP32-C3 qua bốn tuyến. Bằng chứng và
+bảng đối chiếu từng byte: [docs/vmlhud-nav-payloads.md §10](docs/vmlhud-nav-payloads.md).
+Log tho `out/cycle-trial-3.log`, ban giai ma `out/cycle-trial-3.jsonl`.
+
+Bốn kết quả chốt được:
+
+1. **Layout variable1 (CMD 0x00) đúng nguyên văn** như phân tích tĩnh. Ví dụ
+   khung thật khớp màn hình "150m Quốc Lộ 13 · 25p · 8.3km". iOS **không hề**
+   gửi CMD 0x40 trong cả phiên.
+2. **Byte thời gian thứ ba LÀ GIÂY** — sửa kết luận cũ. Ba tuyến độc lập khớp
+   ETA trên màn hình (25m38s/37m52s/22m05s), và builder Android `W7/e` sinh
+   giờ/phút/giây từ một tham số tổng giây (`tag 5 = tổng % 60`).
+   `bridge/vmlhud_nav.py` đã điền `remain_time_s` cho cả ba layout.
+3. **Không lập được bảng direction↔mũi tên**: byte `[0]` bằng `0xFE` trong cả
+   1.963 khung, kể cả khi app hiện mũi tên rẽ phải, biểu tượng điểm đến, hay
+   không dẫn đường. **Đây là rủi ro lớn nhất còn lại**: nếu không ép được iOS
+   sang CMD 0x40 thì HUD Mazda chỉ có chữ, không có mũi tên.
+4. **Thoát tuyến = khung nhàn rỗi**, không có lệnh xoá riêng: `distance` quay về
+   `0xFFFFFFFF` và toàn bộ đuôi về 0 (trường `next_road` lúc đó mang chuỗi thời
+   tiết). Đây chính là tín hiệu "xoá guidance" cho phía CMU.
+
+### Việc tiếp theo ngay (thứ tự mới)
+
+1. **Truy nhánh CMD 0x40 trên iOS**: đọc hai caller 0x4ddc/0x52ac trong
+   `vietmap_hud_sdk.framework` để tìm điều kiện chọn `SimplifyNavigationInformationData`;
+   thử đổi `MODEL`/`PROTOCOL`/`HW`/`FW` trong đáp getHUDInfo của emulator rồi
+   bắt lại. Có CMD 0x40 là có `direction` + ảnh mũi tên JPEG.
+2. **Giải mã CMD 0x01 8 byte** (`0186A00000000000`, ~1 Hz, bất biến khi xe
+   đứng): codec hiện chỉ nhận dạng bản 4 byte (camera/biển báo).
+3. **Lấy mẫu khi xe chạy thật**: chỉ khi di chuyển mới biết `speed` và
+   `current_road` (luôn rỗng khi đứng yên) được điền ra sao, và `direction` có
+   đổi không. Mang board + điện thoại lên xe, chạy một tuyến ngắn có rẽ.
+4. Sang giai đoạn CMU: daemon native ATT (`native/`) ăn theo profile đã được app
+   chấp nhận (MODEL:H50/PROTOCOL:2.2.2S qua FFF0); rồi nối `com.jci.vbs.navi`.
+
+Lưu ý thiết bị: helper `work/tools/iosmcp.py` nói chuyện thẳng với ios-mcp trên
+máy (`http://192.168.68.104:8090/mcp`) và **vẫn chạy được khi connector MCP của
+Claude báo 502**. `long_press`/`swipe_screen` nhận `duration` theo **mili giây**
+— truyền `2.0` nghĩa là 2 ms và thao tác sẽ không ăn.
+
 ## Cập nhật phiên 22-10-2026 (lần 3, tối): APP iOS ĐÃ KẾT NỐI EMULATOR — permission gate TRẢ LỜI: nhánh A
 
 Đọc [docs/hud-dart-layer-analysis.vi.md](docs/hud-dart-layer-analysis.vi.md)
@@ -226,8 +269,10 @@ này trên local.
 - Vector cũ heartbeat: `A55A37C50000000602FF3AA1`.
 - Fixed 175 byte: legacy CMD 0; variable1: new CMD 0; variable2: CMD 0x40,
   có image_len và ảnh JPEG/flag, không chỉ header hằng số.
-- Byte thời gian thứ ba của variable iOS không mặc định là giây. Giữ raw,
-  `remain_time_s=None`. Mã hướng rẽ và đơn vị speed cần đối chiếu runtime.
+- Byte thời gian thứ ba của variable **là giây** (đã chốt bằng runtime 22-10,
+  xem phần cập nhật lần 4 ở đầu file); codec điền `remain_time_s` cho cả ba
+  layout và vẫn giữ bộ ba byte gốc khi dựng lại khung. Mã hướng rẽ trên iOS là
+  hằng số `0xFE`; đơn vị speed vẫn cần mẫu khi xe chạy.
 
 ### Native CMU và USB thử riêng
 

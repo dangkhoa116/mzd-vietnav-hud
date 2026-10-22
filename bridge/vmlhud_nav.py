@@ -23,7 +23,7 @@ class NavInfo:
     distance_m: int = 0         # khoang cach toi diem re, met
     current_road: str = ""      # ten duong hien tai (UTF-8)
     next_road: str = ""         # ten duong tiep theo
-    remain_time_s: int | None = 0  # None for variable layouts: iOS third time byte is not seconds
+    remain_time_s: int | None = 0  # giay con lai; None khi khong giai duoc byte thu ba
     remain_hours: int = 0
     remain_minutes: int = 0
     remain_time_third_raw: int = 0
@@ -123,7 +123,8 @@ def decode_nav_variable(payload):
     return NavInfo(
         direction=direction, distance_m=distance_m,
         current_road=_utf8(current_road), next_road=_utf8(next_road),
-        remain_time_s=None, remain_hours=hours, remain_minutes=minutes,
+        remain_time_s=_hms_to_s(hours, minutes, seconds),
+        remain_hours=hours, remain_minutes=minutes,
         remain_time_third_raw=seconds,
         remain_dist_m=remain_dist_m, speed_kmh=speed_kmh,
         layout="variable1", raw=payload[:end])
@@ -189,7 +190,8 @@ def decode_nav_variable2(payload):
     return NavInfo(
         direction=direction, distance_m=distance_m,
         current_road=_utf8(current_road), next_road=_utf8(next_road),
-        remain_time_s=None, remain_hours=hours, remain_minutes=minutes,
+        remain_time_s=_hms_to_s(hours, minutes, seconds),
+        remain_hours=hours, remain_minutes=minutes,
         remain_time_third_raw=seconds,
         remain_dist_m=remain_dist_m, speed_kmh=speed_kmh,
         layout="variable2", raw=payload[:end])
@@ -199,8 +201,11 @@ def decode_nav_variable2(payload):
 # Builder (de test round-trip va de emu ESP32 tham chieu; C port trong emu).
 # ---------------------------------------------------------------------------
 def _build_time(nav):
-    if nav.remain_time_s is None:
-        return nav.remain_hours, nav.remain_minutes, nav.remain_time_third_raw
+    # Giu nguyen bo ba raw khi no khop remain_time_s (truong hop decode -> build
+    # phai ra dung byte goc, ke ca khi byte thu ba nam ngoai 0..59).
+    raw = (nav.remain_hours, nav.remain_minutes, nav.remain_time_third_raw)
+    if nav.remain_time_s is None or _hms_to_s(*raw) == nav.remain_time_s:
+        return raw
     h, rem = divmod(max(0, nav.remain_time_s), 3600)
     m, s = divmod(rem, 60)
     return h, m, s

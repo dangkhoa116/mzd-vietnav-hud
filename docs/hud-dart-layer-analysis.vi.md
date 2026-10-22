@@ -411,9 +411,19 @@ extended + CYCLE đang xoay tên):
    không hề tồn tại. (Chưa thấy app gọi API nào trong lúc kết nối;
    diff cache `.c/` không có file mới.)
 
-Còn mở: bắt **nav thật** (bắt đầu tuyến trên app rồi đọc frame CMD 0x00/0x40
-variable2 với tên đường + direction); bảng direction↔mũi tên; hai byte đuôi
-layout fixed; FPS/nhiệp frame heartbeat–nav khi đang chạy tuyến.
+**Đã đóng (22-10-2026, chiều)**: bắt được **nav thật** trên bốn tuyến — app gửi
+CMD `0x00` variable1 với tên đường, khoảng cách, giờ/phút/giây và quãng còn lại
+khớp từng chữ với màn hình. Chi tiết và bảng đối chiếu:
+[vmlhud-nav-payloads.md §10](vmlhud-nav-payloads.md). Ba hệ quả:
+
+- byte thời gian thứ ba **là giây** (bác cách đọc cũ);
+- **không lập được bảng direction↔mũi tên**: iOS 3.4.3 gửi `0xFE` cho mọi mũi
+  tên. Câu hỏi mở thay thế: điều kiện nào khiến iOS chuyển sang CMD `0x40`;
+- app **không** gửi lệnh xoá riêng khi thoát tuyến; nó quay về khung nhàn rỗi
+  `distance=0xFFFFFFFF` + đuôi toàn 0.
+
+Còn mở: hai byte đuôi layout fixed (iOS không chọn layout fixed khi emulator đáp
+getHUDInfo, nên chưa bắt được khung nào); CMD `0x01` 8 byte và CMD `0x09`.
 
 ## Cách lấy bằng chứng chạy thật (bước tiếp theo rẻ nhất)
 

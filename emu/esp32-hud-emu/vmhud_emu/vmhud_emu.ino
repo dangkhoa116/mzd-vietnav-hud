@@ -84,10 +84,11 @@ void onFrame(const vmhud::Frame &frame, void *user) {
     vmhud::Nav nav;
     if (!vmhud::navigation(frame,nav)) { Serial.println("[NAV] rejected malformed/unsupported payload; keep RX hex");return; }
     const String current=text(nav.current,nav.currentSize),next=text(nav.next,nav.nextSize);
-    Serial.printf("[NAV] %s dir=%u dist=%um cur=\"%s\" next=\"%s\" remaining=%uh/%um/third_raw=%u remain_m=%u speed_raw=%u\n",
+    Serial.printf("[NAV] %s dir=%u dist=%um cur=\"%s\" next=\"%s\" remaining=%uh/%um/%us remain_m=%u speed_raw=%u\n",
                   nav.layout,nav.direction,(unsigned)nav.distance,current.c_str(),next.c_str(),nav.hours,
                   nav.minutes,nav.timeThird,(unsigned)nav.remainingDistance,nav.speed);
-    // Variable-format third time byte is not assumed to be seconds in the iOS SDK.
+    // Third time byte = seconds: Android W7/e tag 5 writes total%60 and two live
+    // iOS 3.4.3 samples matched the ETA on screen (25m38s, 37m52s).
   } else if (frame.command==1 && frame.size==4) {
     Serial.printf("[CAM] type_raw=%u dist=%um limit_raw=%u\n",frame.payload[0],vmhud::be16(frame.payload+1),frame.payload[3]);
   } else if (frame.command==2 && (frame.size==1 || frame.size==2)) {

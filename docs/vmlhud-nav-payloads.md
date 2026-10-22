@@ -26,10 +26,11 @@ remainDist, currentSpeed) được đóng gói theo **ba** layout, chọn lúc c
 | **variable2** ("Simplify") | `SimplifyNavigationInformationData…` (0x5348) | `0x40` | `sendParamData:andCMD:0x40` | đường gửi mới (H50), hai caller (0x4ddc, 0x52ac) đều gửi CMD 0x40 |
 
 Điểm chung: đuôi có `gio u16be + phut u8 + time_third u8 + quang u32be +
-toc_do u16be`; mọi số đa byte là **big-endian**, tên đường UTF-8. **Không coi
-`time_third` của variable là giây:** nhánh iOS tại 0x4A6C–0x4A70 ghi byte thấp
-của tổng phút còn lại. Codec giữ nguyên raw và để `remain_time_s=None` cho
-variable. Fixed có cách đóng gói giờ/phút/giây riêng.
+toc_do u16be`; mọi số đa byte là **big-endian**, tên đường UTF-8. `time_third`
+**là giây** ở cả ba layout — xem mục 10.2: ba tuyến chạy thật trên iOS 3.4.3 khớp
+ETA trên màn hình, và builder Android `W7/e` sinh giờ/phút/giây từ một tham số
+tổng giây (tag 5 = `tong % 60`). Cách đọc cũ ("byte thấp của tổng phút", suy từ
+0x4A6C–0x4A70) đã bị runtime bác bỏ.
 
 ## 2. Layout "fixed" — 0xAF (175) byte
 
@@ -134,20 +135,24 @@ payload+11. Xem `hud_emulator/protocol.py` và `bridge/vmlhud_frame.py`.
 | `0x02` | app → HUD | heartbeat (payload mang tốc độ; chọn một nhánh protocol theo trạng thái) |
 | `0x0E` | app → HUD | yêu cầu getHUDInfo (payload 1 byte) |
 | `0x0E` | HUD → app | đáp getHUDInfo (payload text §5) |
-| `0x40` | app → HUD | dẫn đường "Simplify" variable2 |
+| `0x40` | app → HUD | dẫn đường "Simplify" variable2 (**chưa thấy trên iOS**) |
+| `0x01` | app → HUD | 4 byte = camera/biển báo; **8 byte trên iOS 3.4.3 chưa giải mã** (mục 10.6) |
+| `0x09` | app → HUD | 5 byte `00`, thấy một lần lúc mở phiên; chưa rõ |
 | `0x0B`,`0x0D`,`0x32`,`0x50`,`0x51`,`0x53`,`0x56`,`0x5A`,`0xF0`,`0xF2` | HUD → app | TPMS / OBD / OTA / cài đặt (dataParsing 0xd494–0xd518) |
 
 ## 8. Còn phải chốt bằng chạy thật (emulator ESP32)
 
-1. **Bảng `direction`**: byte đầu mỗi payload. Phía Dart là
-   `H50ManeuverType` (asset icon `lib/assets/hud/directions/…/direction_*`),
-   ánh xạ tên → số chưa tách được khỏi Dart AOT; khi chạy, đối chiếu byte với
-   mũi tên trên màn app.
+1. **Bảng `direction`**: ~~đối chiếu byte với mũi tên trên màn app~~ — đã chạy
+   thật ngày 22-10-2026 và **không lập được bảng**: iOS 3.4.3 gửi `0xFE` cho
+   mọi loại mũi tên (mục 10.3). Câu hỏi thay thế: **điều kiện nào khiến nhánh
+   iOS gửi CMD `0x40`** (variable2 mới mang `direction` + ảnh mũi tên).
 2. **[0xAD..0xAE] của fixed**: suy là `speed u16be` theo đối xứng hai layout
-   variable; xác nhận khi bắt được khung fixed.
-3. **Profile và cấp quyền**: xác nhận từng bước quét, kết nối, subscribe, HUDInfo
-   và bắt đầu tuyến; thiếu nav chưa chứng minh bị máy chủ từ chối
-   (xem `vietmap-hud-bridge.md`).
+   variable; xác nhận khi bắt được khung fixed. **Chưa bắt được khung fixed** —
+   iOS chọn variable1 ngay khi emulator đáp getHUDInfo.
+3. **Profile và cấp quyền**: ~~chưa xác nhận~~ — đã xong cả chuỗi quét → kết nối
+   → subscribe → HUDInfo → **dẫn đường thật** với
+   `MODEL:H50, PROTOCOL:2.2.2S, SID:VMEMU0000001` (SID không tồn tại). Không có
+   cổng máy chủ nào chặn. Xem mục 10.
 
 ## 9. Doi chieu cheo voi APK Android (21-10-2026, bo sung buoi toi)
 
@@ -183,3 +188,91 @@ khai niem tren day duoc xac nhan lai tung byte:
 
 Nguon phan tich: `work/analysis/apk/` (ngoai repo) - jadx output cua APK do chu
 xe cung cap.
+
+## 10. Doi chieu RUNTIME voi app that (22-10-2026, iOS)
+
+Lan dau bat duoc **dan duong that**: VIETMAP LIVE **3.4.3** tren iPhone 8 Plus
+da ket noi emulator ESP32-C3 (`MODEL:H50, PROTOCOL:2.2.2S, SID:VMEMU0000001`)
+va gui lien tuc CMD `0x00` trong suot bon tuyen duong khac nhau. Log tho:
+`out/cycle-trial-3.log`; ban giai ma: `out/cycle-trial-3.jsonl` (ca hai la
+artifact ignored). Fixture byte that nam trong `bridge/vmlhud_nav_test.py`.
+
+### 10.1 Layout variable1 dung nguyen van
+
+iOS chon **variable1 / CMD 0x00** (dung nhu nhanh `hudInfo != nil`), khong he
+gui CMD `0x40` trong ca phien. Moi offset o muc 3 khop byte-for-byte. Vi du
+khung that, chup luc man hinh app hien "150m Quoc Lo 13 - 25p - 8.3km":
+
+```
+FE 000000 96 | 0E | 51 75 E1BB91 63 20 4C E1BB99 20 31 33 | 00 | 0000 19 26 0000203D 0000
+^dir ^dist=150  ^len=14  ^"Quoc Lo 13" (UTF-8 14 byte)      ^cur="" ^h=0 ^m=25 ^s=38 ^8253m ^speed=0
+```
+
+### 10.2 Byte thoi gian thu ba LA GIAY (sua ket luan cu)
+
+Muc 1 truoc day ghi "khong coi `time_third` la giay" dua tren doc tinh nhanh
+iOS 0x4A6C-0x4A70. **Runtime bac bo cach doc do.** Ba tuyen doc lap deu khop
+khi coi byte thu ba la giay, va sai neu coi la "byte thap cua tong phut":
+
+| Man hinh app | h/m/byte3 tren song | Hieu theo giay | ETA app | Gio bat |
+| --- | --- | --- | --- | --- |
+| 25p / 8.3km | 0 / 25 / 38 | 25m38s | 15:19 | ~14:53 |
+| 37p / 14.2km | 0 / 37 / 52 | 37m52s | 15:36 | ~14:58 |
+| 22p / 12.2km | 0 / 22 / 5 | 22m05s | 15:22 | ~15:00 |
+
+Doc lap voi do, builder Android `W7/e.java` + `m0()` cho thay ba the thoi gian
+duoc sinh tu **mot tham so tong giay** `i12`: tag 3 = `i12/3600` (u16be gio),
+tag 4 = `i12/60 - (i12/3600)*60` (u8 phut), tag 5 = **`i12 % 60`** (u8 giay).
+
+`bridge/vmlhud_nav.py` nay dien `remain_time_s` cho ca ba layout; builder van
+tra ve dung bo ba byte goc khi bo ba do khop `remain_time_s`, nen khung co byte
+thu ba ngoai 0..59 (chua tung thay tren song) van round-trip nguyen ven.
+
+### 10.3 `direction` tren iOS la HANG SO 0xFE - chua mang ma huong re
+
+Byte `[0]` **luon bang 0xFE (254)** trong toan bo **1.963 khung** bat duoc, ke ca
+khi mui ten tren man hinh app khac han nhau:
+
+| Mui ten tren app | direction tren song |
+| --- | --- |
+| Re phai vao Quoc Lo 13 (ba tuyen) | `0xFE` |
+| Bieu tuong **diem den** (tuyen 47m, "30m Duong So 7") | `0xFE` |
+| Khong dan duong (khung nhan roi) | `0xFE` |
+
+Nghia la **khong the dung CMD 0x00 cua iOS 3.4.3 de suy ra mui ten**. Tren
+Android, `Ma/b.java` cho thay Dart gui kem `imageBase64` (anh mui ten da render)
+va co co `isV2`; duong variable2/CMD 0x40 moi mang ca `direction` lan anh.
+Chua biet dieu kien nao khien nhanh iOS chuyen sang CMD 0x40 - day la cau hoi
+mo quan trong nhat cho buoc HUD Mazda, vi thieu no thi HUD chi co chu, khong co
+mui ten. **Khong** ket luan 0xFE = "re phai".
+
+### 10.4 Khung "het dan duong" = khung nhan roi
+
+Khi bam Thoat khoi dan duong, app khong gui lenh xoa rieng. No quay ve khung
+nhan roi, dung CMD 0x00 variable1:
+
+```
+FE FFFFFFFF 14 "31° mây đen u ám" 00 0000 00 00 00000000 0000
+   ^dist = 0xFFFFFFFF            ^cur="" ^toan bo duoi = 0
+```
+
+Tuc la: `distance == 0xFFFFFFFF` + duoi toan 0 chinh la tin hieu **xoa guidance**
+cho phia CMU. Truong `next_road` khi do mang chuoi thong tin (thoi tiet) chu
+khong phai ten duong - decoder phia sau phai phan biet bang `distance`, khong
+phai bang tien to `FE`.
+
+### 10.5 Heartbeat CMD 0x02 that su mang toc do
+
+764 khung heartbeat payload `0000`, dung **mot** khung `0028` = 40. Khop suy
+luan u16be km/h o muc 7 (GPS fallback bat len mot nhip roi ve 0 vi xe dung yen).
+
+### 10.6 CMD moi thay tren song, chua giai ma
+
+| CMD | plen | Payload quan sat | Ghi chu |
+| --- | --- | --- | --- |
+| `0x01` | 8 | `0186A00000000000` (2.920 khung, ~1 Hz, bat bien) | Codec hien chi nhan dang CMD 1 **4 byte** (camera/bien bao). Ban iOS 8 byte chua giai duoc; `01 86 A0` = 100000 co the la "khong co camera trong 100 km", chua xac nhan. |
+| `0x09` | 5 | `0000000000` (dung 1 khung, luc bat dau phien) | Chua ro |
+| `0x0D` | 1 | `FF` (2 khung) | OBD query, khop ghi nhan truoc do |
+
+Khong suy doan y nghia vao codec khi chua co bang chung; moi khung tren van
+duoc giu nguyen hex trong capture.
