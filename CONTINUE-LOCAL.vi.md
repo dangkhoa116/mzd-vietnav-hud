@@ -26,7 +26,7 @@ Phân tích vì sao, và việc nên làm tiếp:
   `0x8059`/`0x8058` có tới `jciCARPLAY` không, và `maneuverType`/`maneuverDesc`
   mang gì. Bản phát hành chỉ log lỗi nên cần bản debug; **bản debug ARM nay đã
   build được** bằng zig (`patches/carplay-hud/build_arm_zig.py`), không cần
-  `m3-toolchain` nữa. Còn lại là cài lên xe rồi chạy `vietnav-collect.sh`.
+  `m3-toolchain` nữa. Còn lại là cài lên xe rồi chạy `installer/vietnav-collect.sh`.
 - **Nên thử Android Auto trước**: bản Android của VietMap dựng `Trip` đầy đủ
   (`Step` + `Maneuver` + `Lane`) và ánh xạ đúng hằng `Maneuver.TYPE_*`, còn nhánh
   AA của mod ăn `NavigationState` sinh thẳng từ `Trip` đó. Đường ngắn và rõ hơn
@@ -64,6 +64,108 @@ Thử mất 10 phút và nên thử TRƯỚC khi làm tiếp nhánh BLE. Hai th�
 **Nhánh BLE giả HUD vẫn có giá trị riêng** khi: không muốn cắm CarPlay/AA, muốn
 dẫn đường chạy nền trong lúc màn hình để app khác, hoặc dùng điện thoại Android
 không có AA. Nhưng nếu chỉ cần "dẫn đường như Google Maps" thì thử CarPlay trước.
+
+## Cập nhật phiên 22-10-2026 (lần 5): ĐÃ BUILD ĐƯỢC .so ARM — hết bế tắc toolchain
+
+**Git: đã push.** `origin/main` = `db94655` (`git status` sạch, 0 commit tồn).
+Ba commit của phiên này:
+
+| Commit | Nội dung |
+| --- | --- |
+| `30b9dca` | bản vá `nav.cpp`: suy hướng rẽ từ chữ khi app không đặt `CPManeuverType` |
+| `e25d246` | ghi nhận máy test trên xe là **iPhone Air / iOS 27.0.1** |
+| `db94655` | `build_arm_zig.py`: build .so ARM bằng zig, không cần `m3-toolchain` |
+
+### 1. Máy test là iPhone Air / iOS 27.0.1 — chốt được phía iOS
+
+`CPManeuver.maneuverType` có từ iOS 17.4 ⇒ trên máy này API **chắc chắn có sẵn**.
+Không còn đường thoát "iOS quá cũ": VIETMAP LIVE không điền trường đó vì bản thân
+app không bao giờ gọi `setManeuverType:` (đã kiểm selector trong
+`vietmap_live_navigation_plugin.framework`). Đừng dựng lại caveat iOS 16 — máy
+iPhone 8 Plus / iOS 16.7.15 **chỉ dùng nghiên cứu BLE**, không liên quan phép thử
+trên xe.
+
+### 2. Bản vá CarPlay (`patches/carplay-hud/`)
+
+Khi `maneuverType == 0` ở `idx >= 1` thì suy hướng rẽ từ chuỗi lệnh thay vì để
+`is_context_type()` vứt đi. Chỉ `type == 0` được xét lại ⇒ app có điền trường này
+(Apple/Google Maps) giữ nguyên hành vi cũ. `classify()` **từ chối khi không
+chắc** (câu bám đường, hướng la bàn, từ chỉ hướng đứng một mình) — đoán bừa ở đó
+sẽ dán một mũi tên sai suốt cả chặng. 43 kiểm tra host PASS
+(`cd tests && make test-carplay`).
+
+### 3. Build .so ARM: đã gỡ được bế tắc
+
+Trước đây kẹt vì `mazda/Makefile` của upstream cần submodule `m3-toolchain`,
+toàn binary ELF Linux x86_64 — máy Windows này không WSL, không container nên
+chạy không nổi. Nay cross-build bằng **zig**:
+
+```sh
+python -m pip install ziglang pyelftools      # đã cài trên máy này
+python patches/carplay-hud/build_arm_zig.py \
+    --carplay ../mazda-carplay-hud \
+    --baseline <libpatch-blmjcicarplay.so lấy từ VIETNAV-HUD-0.9.1-USB.zip>
+```
+
+Phải `git apply` patch vào checkout `mazda-carplay-hud` trước, nếu không script
+tự báo thiếu `maneuver_text.h`. Checkout đó hiện **đã trả về sạch** (HEAD
+`9782e92`) theo đúng lệ repo này dùng với `oem-aa-mod`.
+
+Kết quả (zig 0.16.0, target `arm-linux-gnueabi.2.4.0`, `-mcpu=cortex_a9+neon`):
+
+| Bản | Kích thước | Log |
+| --- | --- | --- |
+| release | 197.336 B | chỉ ERROR |
+| **debug** | 3.365.148 B | **có `nav PICK`, `nav TEXT-FALLBACK`** |
+
+Script tự kiểm lại ELF, lấy **chính file .so đang chạy trên xe** làm chuẩn:
+soft-float base AAPCS (không `TAG_ABI_VFP_ARGS`, không `EF_ARM_ABI_FLOAT_HARD`),
+`PCS_WCHAR_T=4`/`ENUM_SIZE=2`/`ALIGN_NEEDED=1`/ARMv7-A khớp y file trên xe, chỉ
+cần `GLIBC_2.4` (CMU có 2.11), và **xuất đúng 5 symbol** interpose. Báo cáo ghi
+ra `out/carplay-arm/ARM-CHECKS.json`.
+
+Khâu kiểm này bắt được một lỗi thật: link tĩnh libc++ lôi theo `operator new` /
+`operator delete` thành symbol global, mà .so nạp bằng `LD_PRELOAD` nên nằm đầu
+bảng tra symbol của cả tiến trình ⇒ để lọt là chiếm quyền cấp phát bộ nhớ của cả
+`jciCARPLAY`. `patches/carplay-hud/exports.map` chặn lại. **Đừng bỏ version
+script đó.**
+
+Hai điểm khác upstream (giải thích đầy đủ trong `patches/carplay-hud/README.md`):
+libc++ link tĩnh thay vì mượn `libstdc++` máy xe, và thêm một reloc
+`R_ARM_TLS_DTPMOD32` cho trạng thái exception của libc++abi. **Không được bỏ
+exception để tránh reloc đó**: `nav.cpp`, `devmgr_shim.cpp`, `hud_send.cpp` đều
+bọc callback thread OEM bằng `catch (...)`, và `hud_send.cpp:736` ghi rõ exception
+lọt ra là `std::terminate` → `SIGABRT` → **reboot head unit**.
+
+### 4. Việc tiếp theo, theo thứ tự
+
+1. **Cài bản debug lên xe rồi chạy `installer/vietnav-collect.sh`.** Đây là việc duy nhất
+   trả lời dứt điểm: với VietMap thì khung iAP2 `0x8059`/`0x8058` có tới
+   `jciCARPLAY` không, và `maneuverType` (@`0x128`) / `maneuverDesc` (@`0x24`)
+   mang giá trị gì.
+   - Không có khung nào ⇒ iOS không phát luồng iAP2 cho app này; mọi sửa phía xe
+     vô ích, chuyển sang nhánh BLE hoặc Android Auto.
+   - Có khung, `maneuverType == 0`, `desc` có chữ ⇒ bản vá đúng hướng; chỉnh bộ
+     từ khoá trong `maneuver_text.h` cho khớp **chuỗi thật** (hiện dựng theo cách
+     hành văn thường gặp, chưa ai đọc chuỗi thật của VietMap lần nào).
+2. **Thử Android Auto** — vẫn là phép thử rẻ nhất, không tốn dòng code nào. Bản
+   Android của VietMap publish `Trip` đầy đủ (`Destination`/`TravelEstimate`/
+   `Step`/`Maneuver`/`Lane`) và ánh xạ đúng hằng `Maneuver.TYPE_*` chuẩn, nên
+   không dính vấn đề của CarPlay.
+3. Nhánh BLE: lấy mẫu **khi đang lái** (`speed` luôn 0 và `current_road` luôn rỗng
+   khi đỗ), và CMD 0x09 (5 byte 0, một lần đầu phiên) vẫn chưa giải mã.
+
+### 5. Môi trường máy này (để agent sau không mò lại)
+
+- **Có**: `python -m ziglang` (zig 0.16.0, cross-compile được ARM), `pyelftools`,
+  git, Frida 17.24.3.
+- **Không có**: `make`, `gcc`, WSL, Docker, `m3-toolchain`, `readelf`/`strings`
+  (dùng `pyelftools` thay — xem `patches/carplay-hud/build_arm_zig.py`).
+- **Bẫy đã mất thời gian hai lần**: heredoc `<<'PY'` của Git Bash trên máy này
+  **ăn mất dấu gạch chéo ngược** — `'\\'` trong body thành `'\'`, gây
+  `SyntaxError` hoặc ghi NUL byte vào file. Viết file bằng công cụ Write, hoặc
+  tránh hẳn backslash trong body heredoc.
+- Console là cp1252: đặt `PYTHONIOENCODING=utf-8` khi chạy script in tiếng Việt.
 
 ## Cập nhật phiên 22-10-2026 (lần 4): ĐÃ CÓ DẪN ĐƯỜNG THẬT TRÊN EMULATOR
 
@@ -583,6 +685,15 @@ Emu không tái hiện radio TI/HFP/A2DP/LE đồng thời; không dùng kết q
   relay/encryption/quyền app còn là phần nghiên cứu chưa triển khai.
 - SID, runtime UID checksum và dấu vết API cấp quyền là ba thứ khác nhau.
   Không nhận nav chưa đủ để quy về server/serial.
+- **.so ARM build bằng zig chưa từng chạy trên xe.** Nó chỉ được kiểm bằng cách
+  đọc lại ELF và so với file đang chạy trên xe. Đúng ABI **không** có nghĩa là
+  đúng hành vi: libc++ link tĩnh và reloc TLS là hai thứ bản upstream không có.
+- VietMap iOS không gọi `setManeuverType:` là **đã kiểm trong binary**, nhưng
+  "vì vậy HUD trống" vẫn là **giả thuyết**: chưa có log nên chưa biết khung
+  `0x8059` có tới `jciCARPLAY` khi chạy VietMap hay không. Nếu iOS không phát
+  luồng iAP2 cho app này thì bản vá text-fallback không cứu được gì.
+- Bộ từ khoá trong `maneuver_text.h` dựng theo cách hành văn thường gặp, **không
+  phải** từ chuỗi `maneuverDesc` thật của VietMap — chưa ai đọc chuỗi đó lần nào.
 
 ## Thứ tự công việc sau khi có log
 
@@ -599,13 +710,24 @@ Emu không tái hiện radio TI/HFP/A2DP/LE đồng thời; không dùng kết q
 
 ## Prompt cho agent chạy local
 
-> Đọc CONTINUE-LOCAL.vi.md và các README được dẫn trước khi sửa. Tiếp tục dự
-> án Vietnav đưa VIETMAP LIVE lên HUD zin Mazda theo hướng giả HUD. Source local
-> kế thừa phần bàn giao trên nền 3338914; giữ mọi thay đổi đang dở. Ưu tiên thử
-> board ESP32-C3 có sẵn và phân tích capture BLE thật. Đã có firmware build,
-> codec/test, native ATT và USB trial; đừng phân tích lại từ đầu hay yêu cầu
-> mua HUD thật chỉ vì BlueZ 4.98. Chưa có app/board thật được xác nhận và chưa
-> nối output VBS. Nếu có log mới, dùng capture/decode để xác định bước lỗi;
-> nếu chưa có, kiểm setup local và hướng dẫn nạp/lấy log. Phân biệt kết quả
-> host/QEMU với radio trên xe. Tiếp tục phần có thể làm, không tự flash xe
-> hoặc publish/push khi chưa được yêu cầu.
+> Đọc CONTINUE-LOCAL.vi.md (bắt đầu từ mục **lần 5**) và các README được dẫn
+> trước khi sửa. Tiếp tục dự án Vietnav đưa VIETMAP LIVE lên HUD zin Mazda.
+> Trạng thái: `origin/main` = `db94655`, cây sạch.
+>
+> Đã kiểm trên xe: **Google Maps qua CarPlay lên HUD được, VietMap thì không**.
+> Nguyên nhân khả dĩ nhất đã khoanh vùng (app không gọi `setManeuverType:`, máy
+> test iPhone Air / iOS 27.0.1 nên API chắc chắn có sẵn), bản vá text-fallback
+> đã viết và 43 kiểm tra host PASS, **bản .so ARM debug đã build xong** bằng zig
+> (`patches/carplay-hud/build_arm_zig.py`) — không cần `m3-toolchain` nữa.
+>
+> Việc tiếp theo cần người/xe: **cài bản debug rồi chạy `installer/vietnav-collect.sh`**
+> để biết khung iAP2 `0x8059` có tới `jciCARPLAY` khi chạy VietMap không và
+> `maneuverDesc` mang chuỗi gì; song song đó thử **Android Auto** (rẻ nhất,
+> không tốn dòng code). Đừng phân tích lại từ đầu: đã có capture nav thật,
+> codec + test, bộ đổi sang struct `com.jci.vbs.navi`, và matcher ảnh mũi tên.
+> Đừng dựng lại caveat "iOS 16 không đặt được `maneuverType`" (đã bị bác) và
+> đừng thử lại "đường tắt" đã bị thực nghiệm bác ở mục gạch ngang.
+>
+> Phân biệt rõ kết quả host/QEMU với radio trên xe, và đừng phát biểu .so ARM là
+> đã chạy được trên xe — nó chỉ mới đúng ABI. Không tự flash xe hoặc
+> publish/push khi chưa được yêu cầu.
