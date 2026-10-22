@@ -29,6 +29,74 @@ Bước cần làm ngay là thử BLE thật bằng C3 và lấy log, sau đó m
 - Cài REA/MCP nằm ngoài Git, cần khởi động lại Codex để dùng MCP; CLI đã chạy.
   Không có kết quả tải firmware, flash board/xe hay nav thật trong phiên này.
 
+## Cập nhật phiên local 22-10-2026 (lần 2): board đã nạp và kiểm BLE thật
+
+- **Đã xác định firmware lạ trên board**: build **16-09-2026**, IDF v5.5.5, log
+  tiếng Việt không dấu, in `conn=%d`, và `remain=%ds/%dm` (coi byte thời gian
+  thứ ba là giây — cách hiểu đã bị bác). Đây là bản **trước các bản sửa tháng
+  10**, khớp triệu chứng "H50 trả khung thừa 8 byte" trong bàn giao (trailer
+  MD5 16 byte thay vì checksum 8 byte).
+- **Đã backup toàn bộ 4MB flash cũ** ra `out/board-flash-backup-20261022-013057.bin`
+  trước khi ghi đè; firmware đó không có source trong repo nên backup là bản
+  duy nhất. Muốn quay lại: `write-flash 0x0` chính file này.
+- Kit `C:\work\mazda\vietnav-esp32c3-hud-trial` đã kiểm: ZIP SHA256 khớp bàn
+  giao, `vmhud-c3-merged.bin` khớp `SHA256SUMS`, và **7 file source trong kit
+  khớp byte-for-byte với repo** — nên ảnh này là bản build của source hiện tại.
+- Đã nạp `vmhud-c3-merged.bin` (esptool 5.1.0, hash verified). Board giờ in
+  `connected=0` và `[PING] frozen SDK-format vector: OK`.
+- **Kiểm BLE thật lần đầu: 22/22 check pass** bằng `ble_central_probe.py` mới,
+  PC làm GATT central cho cả hai họ. BLE MAC `38:44:BE:42:E5:8E`, MTU 256.
+  Quảng bá có tên + FFF0 + FFFF; HUDInfo đáp đúng và parse qua kiểm checksum;
+  `cur="Đường Nguyễn Văn Linh" next="Đại lộ Võ Nguyên Giáp"` nguyên vẹn qua
+  ghi phân mảnh 20 byte; heartbeat CRC16 legacy và `dir=0xFF` đều decode được.
+  Transcript: `out/ble-probe-20261022.json`.
+- **Giả thuyết "app không thấy vì advertisement thiếu tên/UUID" đã bị bác**:
+  quét từ PC thấy tên và cả hai UUID, RSSI −51. Nguyên nhân app không liệt kê
+  thiết bị nằm ở phía app (bộ lọc, cấp quyền, hoặc nhánh profile), chưa rõ.
+- **Đã sửa bug UTF-8 thật trên Windows**: `python -m hud_emulator decode > x.jsonl`
+  và `decode_log.py capture.txt > capture.jsonl` — đúng lệnh trong README —
+  thoát 1 với `'charmap' codec can't encode` ngay khi gặp tên đường tiếng Việt
+  (locale cp1252), file ra rỗng. Đã pin UTF-8 cho stdout ở `hud_emulator/__main__.py`
+  và `emu/esp32-hud-emu/decode_log.py`; test cũng pin `encoding='utf-8'` để
+  bắt được lỗi này. `test_hud_protocol.py` từ 16/17 lên **17/17**.
+- Chưa chạy được `tests/test_esp32_hud.py` trên máy này: cần `g++` (chưa cài).
+  Codec C++ đã được kiểm bằng radio thật ở trên, không thay cho bộ sanitizer.
+- **Vẫn chưa có**: nav từ app thật và mọi đầu ra lên HUD Mazda. Chưa chốt
+  đường truyền board → CMU.
+
+### PHÁT HIỆN LỚN: app Android dùng Bluetooth Classic, không dùng BLE
+
+Thử trực tiếp trên **Samsung SM-X236B, Android 16**, VIETMAP LIVE **3.4.3**
+qua ADB (Cài đặt → Cài đặt thiết bị → HUD → Kết nối thiết bị):
+
+- Quyền **không phải nguyên nhân**: `BLUETOOTH_SCAN`/`CONNECT`/`ADVERTISE`,
+  `ACCESS_FINE/COARSE/BACKGROUND_LOCATION` đều `granted=true`,
+  `location_mode=3`, `bluetooth_on=1`.
+- Màn HUD gọi **`BluetoothAdapter.startDiscovery()`** (inquiry **Classic**).
+  Trong cả phiên **không có** `startScan`/`ScanFilter`/`[FBP]`.
+- Android **đã thấy board**, đọc đúng **EIR UUID FFF0 + FFFF**, và cache tên
+  **`VMHUD-EMU`**; `dumpsys bluetooth_manager` ghi board là **`[ LE ]`** trong
+  khi 53 thiết bị khác đều `DUAL`/`BR/EDR`.
+- App vẫn báo **"Không có thiết bị nào xung quanh bạn"**. Board quảng bá liên
+  tục, không central nào kết nối.
+
+**Kết luận: ESP32-C3 không thể hiện trong màn HUD của app Android** vì C3
+không có Bluetooth Classic. Đây là giới hạn phần cứng, **không phải lỗi
+firmware** — firmware hiện tại đã pass 22/22 qua BLE thật.
+
+Hệ quả:
+1. Nhánh **Android** cần chip dual-mode có SPP: **ESP32 gốc (WROOM-32/WROVER)**.
+   C3/S3/C6/H2 đều BLE-only, không dùng được.
+2. Nhánh **iOS vẫn đáng thử với board C3 đang có** — SDK iOS dùng CoreBluetooth
+   service `FFF0`, không phải SPP. **Chưa thử iPhone lần nào.**
+3. **Đổi hướng nhánh CMU**: BlueZ 4.98 thiếu GATT từng bị coi là ngõ cụt, nhưng
+   rootfs có `rfcomm.ko`, `sdptool`, `rfcomm`, plugin Serial. Nếu app đi SPP
+   thì stack Classic của CMU **hợp hướng hơn** giả định cũ.
+
+Chi tiết, log và evidence: [docs/hud-dart-layer-analysis.vi.md](docs/hud-dart-layer-analysis.vi.md).
+Ảnh màn hình và log thô trong `out/` (ignored): `logcat-hudscan.txt`,
+`tablet-1..8.png`, `app-trial-hudscreen.log`.
+
 ## Lấy source trên local
 
 Source và tài liệu này được gom trong cùng đợt commit/push lên `main` của

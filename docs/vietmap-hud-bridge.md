@@ -38,7 +38,7 @@ kiểm thực tế, chưa thể coi đầu ra của nhánh VietMap BLE là hoàn
 | --- | --- | --- |
 | `bridge/vmlhud_frame.py` | Khung mới: hai checksum 4 byte; khung cũ: CRC16 Modbus | Đối chiếu codec Python/native và vector SDK; chưa có capture từ điện thoại thật |
 | `bridge/vmlhud_nav.py` | Ba layout dẫn đường, kể cả ảnh mũi tên variable2 | Giải mã tĩnh; cần xác nhận bảng direction và đơn vị tốc độ ngoài thực tế |
-| `emu/esp32-hud-emu/` | BLE peripheral FFF0 và FFFF trên ESP32-C3 | Build Arduino ESP32 3.3.2 + NimBLE 2.3.7; chưa thử board/điện thoại thật |
+| `emu/esp32-hud-emu/` | BLE peripheral FFF0 và FFFF trên ESP32-C3 | Board thật pass 22/22 qua BLE với PC làm central (22-10-2026); chưa thử với điện thoại/app thật |
 | `native/` | ATT server chạy trong tiến trình `bds`, chia sẻ UART với TPMS | Đã kiểm bằng transport giả, ARM và guest CMU; chưa xác minh advertising trên xe |
 | `native/usb/` | Kit thử native, thu log, phục hồi wrapper TPMS | Xem [hud-native-cmu.md](hud-native-cmu.md) và [kết quả emu](../native/emu/README.md) |
 

@@ -33,8 +33,27 @@ For the ESP32-C3 Mini already available, use the [C3 firmware and capture
 guide](emu/esp32-hud-emu/README.vi.md). Both the default legacy-advertising
 build and optional extended diagnostic compile with Arduino-ESP32 3.3.2 /
 NimBLE 2.3.7. The shared C++ codec passes sanitizer checks, frozen SDK vectors,
-Python cross-checks and 50,000 malformed inputs. Hardware/app acceptance is
-still unverified. C3 supports BLE, not Classic SPP; stock CMU SPP capability
+Python cross-checks and 50,000 malformed inputs. On 2026-10-22 a flashed board
+passed 22/22 checks over **real BLE** from a PC acting as the GATT central
+(`emu/esp32-hud-emu/ble_central_probe.py`): advertising, connection, both
+device families, checksum-verified HUDInfo, Vietnamese road names through
+20-byte fragmented writes, the legacy CRC16 heartbeat and end-of-guidance.
+Mazda HUD output remains unverified — a PC central is not the phone app.
+
+> **Settled 2026-10-22 — the Android app discovers HUDs over Bluetooth Classic,
+> not BLE.** On a Samsung running Android 16 with VIETMAP LIVE 3.4.3, the HUD
+> screen calls `BluetoothAdapter.startDiscovery()` (a Classic inquiry) and never
+> calls `startScan`. Android *did* find the board, parsed its `FFF0`+`FFFF` EIR
+> UUIDs and cached the name `VMHUD-EMU`, yet the app reported "no devices
+> nearby"; the board was the only `LE`-only entry among 53 `DUAL`/`BR/EDR`
+> devices, and every relevant permission was granted. **The ESP32-C3 therefore
+> cannot serve the Android branch** — a hardware limit, not a firmware fault.
+> That branch needs a dual-mode part with SPP such as the original ESP32
+> (WROOM-32); the **iOS branch is still worth trying on the C3**, since the iOS
+> SDK uses CoreBluetooth on `FFF0`. See the
+> [Dart-layer analysis](docs/hud-dart-layer-analysis.vi.md) (Vietnamese).
+
+C3 supports BLE, not Classic SPP; stock CMU SPP capability
 also remains conditional on controller ownership and the app's actual profile.
 
 ## Background

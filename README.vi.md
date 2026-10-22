@@ -29,8 +29,26 @@ Chưa thử BLE thật và chưa nối output VBS cho nhánh này.
 Với board **ESP32-C3 Mini** đang có, dùng [firmware và hướng dẫn lấy
 log](emu/esp32-hud-emu/README.vi.md). Đã build cả bản quảng bá legacy mặc định
 và bản extended thử nghiệm bằng Arduino-ESP32 3.3.2 / NimBLE 2.3.7. Codec C++
-qua sanitizer, vector SDK, đối chiếu Python và 50.000 đầu vào lỗi; chưa xác
-nhận app trên board thật. C3 hỗ trợ BLE, không có SPP Classic. SPP trên CMU
+qua sanitizer, vector SDK, đối chiếu Python và 50.000 đầu vào lỗi. Ngày
+22-10-2026, board đã nạp firmware pass **22/22 check qua BLE thật** với PC làm
+central (`emu/esp32-hud-emu/ble_central_probe.py`): quảng bá, kết nối, cả hai
+họ thiết bị, HUDInfo có kiểm checksum, tên đường tiếng Việt qua ghi phân mảnh
+20 byte, heartbeat CRC16 legacy và lệnh kết thúc dẫn đường. Chưa xuất lên HUD
+Mazda — PC làm central không thay được app thật.
+
+> **Chốt 22-10-2026 — app Android đi Bluetooth Classic, không đi BLE.** Thử
+> trên Samsung Android 16 với VIETMAP LIVE 3.4.3: màn HUD gọi
+> `BluetoothAdapter.startDiscovery()` (inquiry Classic), không hề gọi
+> `startScan`. Android *đã* thấy board, đọc đúng EIR `FFF0`+`FFFF` và tên
+> `VMHUD-EMU`, nhưng app vẫn báo "Không có thiết bị nào xung quanh bạn"; board
+> là thiết bị `LE`-only duy nhất giữa 53 thiết bị `DUAL`/`BR/EDR`. Quyền đã
+> được loại trừ (tất cả `granted=true`). **ESP32-C3 không dùng được cho nhánh
+> Android** vì không có Bluetooth Classic — đây là giới hạn phần cứng, không
+> phải lỗi firmware. Nhánh Android cần **ESP32 gốc (WROOM-32)** có SPP; nhánh
+> **iOS vẫn đáng thử với C3** vì SDK iOS dùng CoreBluetooth `FFF0`.
+> Xem [phân tích tầng Dart](docs/hud-dart-layer-analysis.vi.md).
+
+C3 hỗ trợ BLE, không có SPP Classic. SPP trên CMU
 cũng còn phụ thuộc quyền sở hữu radio và profile app thực sự chọn.
 
 ## Bối cảnh
