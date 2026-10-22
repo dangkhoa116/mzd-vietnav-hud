@@ -166,6 +166,27 @@ exception để tránh reloc đó**: `nav.cpp`, `devmgr_shim.cpp`, `hud_send.cpp
 bọc callback thread OEM bằng `catch (...)`, và `hud_send.cpp:736` ghi rõ exception
 lọt ra là `std::terminate` → `SIGABRT` → **reboot head unit**.
 
+### 3b. Kiểm trên rootfs CMU thật — PASS (không chạy được emu)
+
+`mzd-connect-emu` **không chạy được trên máy này**: nó cần Linux x86_64 +
+`qemu-user` (xem `docs/SETUP.md` của repo đó), mà Windows không có bản
+`qemu-user` và máy này cũng không có WSL/Docker/qemu. Rootfs thì có sẵn ở
+`C:/work/mazda/work/firmware/rootfs` (CMU150 74.00.333A).
+
+Nên thay vì chạy emu, dùng `patches/carplay-hud/check_rootfs.py` đọc tĩnh
+rootfs đó. **PASS cả bốn mục**: 6/6 symbol OEM `dlsym` có đúng tên; 53/53 (bản
+debug 86/86) symbol undefined của shim có trên `glibc 2.11.1` thật;
+`blmjcicarplay.so` import cả 4 `eDevMgr*` còn `libdevmgr_interface.so` xuất
+chúng và gọi `msgrcv` (⇒ chuỗi interpose có thật); `jciCARPLAY` có trong cả
+`sm.conf` lẫn `sm_WCP.conf`.
+
+Giá trị lớn nhất là mục 1: `oem_thunk.h` cho thunk **degrade êm** khi không
+resolve được, nên gõ sai tên hàm OEM sẽ ra đúng triệu chứng "HUD trống" mà
+không một dòng log nào. Đã loại được khả năng đó.
+
+**Vẫn là kiểm tĩnh.** Chứng minh shim nạp được và chen đúng chỗ, **không**
+chứng minh nó giải mã đúng khung iAP2 của VietMap.
+
 ### 4. Việc tiếp theo, theo thứ tự
 
 1. **Cài bản debug lên xe rồi chạy `installer/vietnav-collect.sh`.** Đây là việc duy nhất

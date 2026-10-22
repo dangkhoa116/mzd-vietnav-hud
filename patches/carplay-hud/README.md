@@ -163,6 +163,41 @@ python -m ziglang c++ -std=c++17 -w -I ../patches/carplay-hud \
 Test dựng từ các câu dẫn đường tiếng Việt thật, gồm cả nhóm **phải bị từ chối**.
 Bản vá `nav.cpp` cũng đã được biên dịch sạch bằng `zig c++ -std=c++17`.
 
+### Kiểm trên rootfs CMU thật (`check_rootfs.py`)
+
+Bộ `mzd-connect-emu` cần Linux x86_64 + `qemu-user` nên không chạy được trên
+máy Windows này. Nhưng **rootfs mà emu đó tiêu thụ thì đọc được**, và nó trả
+lời được phần lớn câu "shim có chạy nổi trên xe không":
+
+```sh
+python patches/carplay-hud/check_rootfs.py --rootfs <rootfs đã giải nén>
+```
+
+Chạy trên rootfs CMU150 `74.00.333A` — **PASS cả bốn mục**:
+
+1. **6/6 symbol OEM mà shim gọi bằng `dlsym` đều có đúng tên** trong
+   `jci/lib/libjcidbus.so` và `jci/lib/libjcivbsnaviclient.so`. Mục này đáng
+   kiểm nhất: `oem_thunk.h` cố ý cho thunk **degrade êm** khi không resolve
+   được, nên gõ sai một tên hàm sẽ ra đúng triệu chứng "HUD trống" mà **không
+   một dòng log nào**. Không có cách nào khác bắt được lỗi đó mà không cần xe.
+2. **53/53 symbol undefined của shim có trên `glibc 2.11.1` thật** của rootfs
+   (`lib/libc-2.11.1.so` & co.). Mạnh hơn hẳn việc chỉ xem hình dạng ELF: nó
+   nói .so này **link được** lúc nạp trên xe. Bản debug: 86/86.
+3. **Chuỗi interpose có thật.** `LD_PRELOAD` chỉ ăn nếu có ai trong tiến trình
+   gọi symbol đó qua PLT:
+   - `jci/carplay/blmjcicarplay.so` (chính là service `jciCARPLAY`) **import cả
+     4 symbol `eDevMgr*`** ⇒ phần hook đăng ký của shim chắc chắn ăn.
+   - `usr/lib/libdevmgr_interface.so` **xuất 4 symbol `eDevMgr*` đó và gọi
+     `msgrcv`** ⇒ đúng thư viện mà shim chen vào để tap khung iAP2.
+4. `jciCARPLAY` có trong **cả `sm.conf` lẫn `sm_WCP.conf`** — khớp logic chọn
+   config (có dây / không dây) của `install/install.sh`.
+
+**Giới hạn:** đây là kiểm **tĩnh**. Nó chứng minh shim nạp được và chen đúng
+chỗ; nó **không** chứng minh shim giải mã đúng khung iAP2 mà VietMap sinh ra.
+Việc đó vẫn phải có log trên xe. Ghi chú thêm: `NaviSupported` trong
+`etc/devmgr_config_master.xml` của rootfs gốc là `FALSE` — installer phải đặt
+`TRUE`, đúng như `install/install.sh` đang làm.
+
 ## Chưa chứng minh được điều gì
 
 Đây là bản sửa theo **giả thuyết mạnh nhất**, chưa phải kết luận đã đo:
