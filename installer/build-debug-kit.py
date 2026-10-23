@@ -49,11 +49,24 @@ nhan duoc tu iPhone.
 CACH LAM
 --------
 1. Cam USB, cai nhu binh thuong (chon muc CarPlay).
-2. Khoi dong lai xe. Cam iPhone, mo VIETMAP LIVE, DAN DUONG MOT DOAN THAT
-   (co re it nhat 2-3 lan). Khoang 5-10 phut la du.
-3. Van de nguyen may, cam USB vao, bam nut "THU THAP" tren man hinh.
+2. Khoi dong lai xe.
+
+3. THU GOOGLE MAPS TRUOC (buoc quan trong nhat).
+   Cam iPhone, mo Google Maps, dan duong 1-2 phut.
+   - Neu kinh lai CO hien mui ten: tot, di tiep buoc 4.
+   - Neu kinh lai KHONG hien gi: dung lai, bam GO / ROLLBACK ngay,
+     roi bao lai. Khong can lam tiep buoc 4.
+
+4. Mo VIETMAP LIVE, DAN DUONG MOT DOAN THAT (co re it nhat 2-3 lan).
+   Khoang 5-10 phut la du. Dung yen mot cho thi khong co du lieu.
+   VietMap CO THE VAN CHUA HIEN tren kinh lai - khong sao, dung la vay,
+   thu can lay la file log o buoc 5.
+
+5. VAN DE NGUYEN MAY, KHONG TAT XE. Cam USB vao, bam nut "THU THAP".
    No luu file vietnav-collect-<ngay>.tgz ngay tren USB.
-4. Mang USB ve, gui file .tgz do.
+   Tat xe truoc khi thu thap la MAT SACH log, phai lam lai tu dau.
+
+6. Mang USB ve, gui file .tgz do.
 
 SAU KHI LAY LOG XONG
 --------------------
