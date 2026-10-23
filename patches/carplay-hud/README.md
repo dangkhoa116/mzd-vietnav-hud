@@ -302,6 +302,21 @@ Việc đó vẫn phải có log trên xe. Ghi chú thêm: `NaviSupported` trong
 - **Bản .so ARM chưa từng chạy trên xe.** Nay đã nạp được dưới đúng loader
   glibc 2.11 của xe qua `qemu-arm` (xem mục dưới), nhưng đó mới là "nạp và
   chạy constructor", không phải chạy thật trong `jciCARPLAY`.
+- **Phải build KÈM tính năng speed-limit (splim).** File đang chạy trên xe là
+  `libpatch-blmjcicarplay-splim.so` của `mazda-hud-toolkit` (30.699 B, md5
+  `faf82efb…` — khớp byte-for-byte với file trong `VIETNAV-HUD-0.9.1-USB.zip`).
+  Bản `-splim` hơn bản thường đúng 3.468 B, và diff chuỗi cho thấy phần thêm là
+  hiển thị tốc độ giới hạn: `/data_persist/splim`, `/data_persist/splim_over`,
+  và lệnh `system()` khởi động `splim_udpd_start.sh`.
+
+  `mazda/Makefile` mặc định đặt `-DCARPLAY_NO_SPLIM`, tức **bỏ** tính năng đó.
+  Build theo mặc định rồi cài lên xe là chủ xe **mất hiển thị tốc độ giới hạn**
+  mà không hiểu vì sao. Phải build với:
+
+  ```sh
+  make M3TOOLCHAIN=... FEATURE_FLAGS='-DCARPLAY_VN_NORMALIZE=1' release debug
+  ```
+
 - **.so đang chạy trên xe KHÔNG cùng nguồn với bản ta build.** Build bản
   *chưa vá* từ `mazda-carplay-hud` HEAD bằng m3-toolchain ra **27.271 B**,
   trong khi file trong `VIETNAV-HUD-0.9.1-USB.zip` là **30.699 B** — lệch
