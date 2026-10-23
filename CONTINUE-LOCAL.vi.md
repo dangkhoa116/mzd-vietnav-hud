@@ -245,6 +245,23 @@ trong release).
 một binary đang chạy tốt bằng binary dựng từ nguồn khác. **Phép thử đầu tiên
 trên xe phải là Google Maps có còn lên HUD không** — nhóm đối chứng.
 
+### 3e. Nhiệm vụ phía iPhone jailbreak
+
+[docs/iphone-probe.vi.md](docs/iphone-probe.vi.md) là bản giao việc cho một
+agent làm trên iPhone đã jailbreak: xác nhận/bác bỏ giả thuyết
+`setManeuverType:` và **lấy về chuỗi `instructionVariants` nguyên văn**.
+
+Đây là phép thử bổ sung cho log trên xe chứ không thay thế: điện thoại trả lời
+được "app đặt gì", xe trả lời được "xe nhận gì". Hai câu khác nhau.
+
+Dữ kiện đã xác minh để trong tài liệu đó (đừng kiểm lại): `setManeuverType:`,
+`setJunctionType:`, `junctionExitAngle` **không có trong binary nào** của
+bundle; `setInstructionVariants:`, `setSymbolImage:`, `setUpcomingManeuvers:`,
+`updateTravelEstimates:forManeuver:`, `startNavigationSessionForTrip:` đều nằm
+trong `vietmap_live_navigation_plugin`. Chuỗi `maneuverType` **có** trong
+`App.framework/App` và `VMLiveActivities` — app có khái niệm kiểu rẽ nội bộ
+(Live Activities), chỉ không chuyển sang CarPlay.
+
 ### 4. Việc tiếp theo, theo thứ tự
 
 1. **Cài bản debug lên xe rồi chạy `installer/vietnav-collect.sh`.** Đây là việc duy nhất
