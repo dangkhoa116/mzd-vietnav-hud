@@ -818,8 +818,10 @@ Emu không tái hiện radio TI/HFP/A2DP/LE đồng thời; không dùng kết q
   "vì vậy HUD trống" vẫn là **giả thuyết**: chưa có log nên chưa biết khung
   `0x8059` có tới `jciCARPLAY` khi chạy VietMap hay không. Nếu iOS không phát
   luồng iAP2 cho app này thì bản vá text-fallback không cứu được gì.
-- Bộ từ khoá trong `maneuver_text.h` dựng theo cách hành văn thường gặp, **không
-  phải** từ chuỗi `maneuverDesc` thật của VietMap — chưa ai đọc chuỗi đó lần nào.
+- Bộ từ khoá trong `maneuver_text.h` **nay lấy từ chính từ vựng của app** (Dart
+  AOT snapshot, UTF-16LE), không còn là đoán. Nhưng chuỗi thực sự đưa vào
+  `setInstructionVariants:` **có thể** do API dẫn đường sinh lúc chạy, nên log
+  trên xe vẫn có thể ra cách hành văn khác.
 
 ## Thứ tự công việc sau khi có log
 

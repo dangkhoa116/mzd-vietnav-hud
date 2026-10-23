@@ -80,6 +80,19 @@ int main()
     expect("Chếch phải", TT_SLIGHT, TT_SIDE_RIGHT);
     expect("Hơi chếch về bên trái", TT_SLIGHT, TT_SIDE_LEFT);
 
+    // --- chuoi THAT doc tu Dart snapshot cua VIETMAP LIVE 3.4.3 ---
+    // (App.framework/App, luu UTF-16LE). Day la tu vung app that su dung,
+    // khong phai doan. Hai dong "hoi lech" tung bi ban dau phan loai nham
+    // thanh cu re thuong vi tu khoa chi co "chech".
+    expect("Rẽ phải", TT_TURN, TT_SIDE_RIGHT);
+    expect("Rẽ trái", TT_TURN, TT_SIDE_LEFT);
+    expect("Rẽ gấp sang phải", TT_SHARP, TT_SIDE_RIGHT);
+    expect("Rẽ gấp sang trái", TT_SHARP, TT_SIDE_LEFT);
+    expect("Rẽ hơi lệch sang phải", TT_SLIGHT, TT_SIDE_RIGHT);
+    expect("Rẽ hơi lệch sang trái", TT_SLIGHT, TT_SIDE_LEFT);
+    expect("Tiếp tục đi thẳng", TT_STRAIGHT, TT_SIDE_NONE);
+    expect("Vào bùng binh và đi theo lối ra thứ 2", TT_ROUNDABOUT, TT_SIDE_NONE);
+
     expect("Quay đầu", TT_UTURN, TT_SIDE_LEFT);
     expect("Quay đầu xe khi có thể", TT_UTURN, TT_SIDE_LEFT);
 
@@ -112,7 +125,10 @@ int main()
     // Day la phan quan trong nhat: doan bua o day se dan mot mui ten sai suot
     // ca chang duong.
     expect_none("Đi tiếp trên Quốc Lộ 13");
-    expect_none("Tiếp tục đi thẳng trên đường hiện tại");  // "tiep tuc" chan truoc
+    // "Bạn đang đi lệch khỏi tuyến đường" la canh bao LECH TUYEN, khong phai
+    // cu re. Day la ly do tu khoa slight la " hoi lech "/" lech sang " chu
+    // khong phai " lech " tran.
+    expect_none("Bạn đang đi lệch khỏi tuyến đường");
     expect_none("Đi theo Đường Số 1");
     expect_none("Continue on Highway 13");
     expect_none("Head north");

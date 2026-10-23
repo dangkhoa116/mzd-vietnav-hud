@@ -23,6 +23,28 @@
 // Deliberately NOT a general translator: it answers one question — "is this
 // string a turn instruction, and which way?" — and says no when unsure, so a
 // road-following line never paints a bogus arrow.
+//
+// Wording source
+// --------------
+// The turn phrases below are not guesses any more. They were read out of the
+// app itself: VIETMAP LIVE 3.4.3's Dart AOT snapshot
+// (Payload/Runner.app/Frameworks/App.framework/App) stores its Vietnamese
+// strings as UTF-16LE (Dart TwoByteString — a UTF-8 scan finds nothing), and
+// the turn vocabulary there is:
+//
+//     Rẽ phải / Rẽ trái                    plain turn
+//     Rẽ gấp sang phải / ... sang trái     sharp
+//     Rẽ hơi lệch sang phải / ... trái     slight      <-- "lệch", NOT "chếch"
+//     Tiếp tục đi thẳng                    straight
+//     Vào bùng binh và đi theo lối ra thứ  roundabout
+//
+// Two of those broke the first version of this file: "lệch" was not a keyword
+// at all (slight turns would have come out as plain turns), and
+// "Tiếp tục đi thẳng" was being vetoed as a road-following line.
+//
+// Caveat: this is the vocabulary the app ships. The exact string handed to
+// `setInstructionVariants:` may still come from the routing API at run time,
+// so a car log can still show wording not listed here.
 
 #ifndef VIETNAV_CARPLAY_MANEUVER_TEXT_H
 #define VIETNAV_CARPLAY_MANEUVER_TEXT_H
@@ -159,6 +181,11 @@ inline bool classify(const char *desc, TextTurn *out)
         MT_ANY(f, " di tiep ", " tiep tuc ", " di theo ", " bam theo ",
                   " continue on ", " head ", " proceed ", " stay on ", " follow ");
 
+    // ...except this one. "Tiếp tục đi thẳng" is a real instruction in the
+    // app's own vocabulary, not a road-following line, so it must survive the
+    // veto above (which would otherwise reject it for containing "tiep tuc").
+    const bool explicit_straight = has(f, " tiep tuc di thang ");
+
     // Destination / start. Before the left/right tests: "đã đến đích bên phải"
     // is an arrival, not a right turn.
     if (MT_ANY(f, " da den ", " den noi ", " diem den ", " dich den ",
@@ -193,7 +220,8 @@ inline bool classify(const char *desc, TextTurn *out)
     if (left == right) {
         // No side, or a contradictory line: only an explicit straight counts,
         // and not when the line is really "keep going along this road".
-        if (!follows_road && MT_ANY(f, " di thang ", " thang tien ", " straight ")) {
+        if ((explicit_straight || !follows_road) &&
+            MT_ANY(f, " di thang ", " thang tien ", " straight ")) {
             out->event = TT_STRAIGHT;
             out->side  = TT_SIDE_NONE;
             return true;
@@ -204,7 +232,11 @@ inline bool classify(const char *desc, TextTurn *out)
 
     // Qualifiers before the plain turn: "rẽ phải gấp" contains "re phai".
     if (MT_ANY(f, " gap ", " ngoat ", " sharp "))                 out->event = TT_SHARP;
-    else if (MT_ANY(f, " chech ", " slight ", " bear "))          out->event = TT_SLIGHT;
+    // "hoi lech"/"lech sang" is how VIETMAP LIVE words a slight turn ("Rẽ hơi
+    // lệch sang phải"). Matched as a pair of words, never bare "lech", so the
+    // off-route warning "Bạn đang đi lệch khỏi tuyến đường" cannot trip it.
+    else if (MT_ANY(f, " chech ", " hoi lech ", " lech sang ",
+                       " slight ", " bear "))                     out->event = TT_SLIGHT;
     else if (MT_ANY(f, " giu lan ", " di theo lan ", " keep ", " fork "))
                                                                   out->event = TT_FORK;
     else if (MT_ANY(f, " nhap lan ", " nhap vao ", " merge "))     out->event = TT_MERGE;

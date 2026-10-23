@@ -70,6 +70,39 @@ nav RAW idx=1 type=0 textturn=1 ev=4 side=2 desc="Rẽ phải vào Quốc Lộ 1
 Là `LOGD` nên **bản release không đổi một byte** (đã kiểm: chuỗi `nav RAW` có
 trong bản debug, không có trong bản release).
 
+### Từ vựng lấy từ chính app, không còn đoán
+
+Chuỗi tiếng Việt của VIETMAP LIVE 3.4.3 nằm trong Dart AOT snapshot
+(`Payload/Runner.app/Frameworks/App.framework/App`), lưu **UTF-16LE** —
+`TwoByteString` của Dart, nên quét UTF-8 không ra gì. Quét đúng mã hoá thì
+thấy bộ từ vựng rẽ:
+
+| Chuỗi của app | Phân loại |
+| --- | --- |
+| `Rẽ phải` / `Rẽ trái` | rẽ thường |
+| `Rẽ gấp sang phải` / `… sang trái` | rẽ gấp |
+| `Rẽ hơi lệch sang phải` / `… sang trái` | rẽ chếch |
+| `Tiếp tục đi thẳng` | đi thẳng |
+| `Vào bùng binh và đi theo lối ra thứ …` | vòng xuyến |
+
+Hai chỗ này **đã làm hỏng bản đầu tiên** của `maneuver_text.h`:
+
+- App dùng **"lệch"**, không phải "chếch". Từ khoá cũ chỉ có `chech`, nên
+  `Rẽ hơi lệch sang phải` sẽ bị xếp thành **rẽ thường** — mũi tên sai, mà sai
+  một cách rất khó nhận ra. Nay khớp theo cặp từ `hoi lech` / `lech sang`,
+  **không** khớp `lech` trần, để cảnh báo lệch tuyến
+  "Bạn đang đi lệch khỏi tuyến đường" không bị nhận nhầm thành cú rẽ.
+- `Tiếp tục đi thẳng` bị luật chặn-câu-bám-đường loại bỏ vì có chữ
+  "tiếp tục". Nhưng trong từ vựng của app đây là **câu lệnh thật**, nên nay
+  được miễn trừ riêng. Câu bám đường không có hướng ("Đi tiếp trên Quốc Lộ 13")
+  vẫn bị từ chối như cũ.
+
+Cả 8 chuỗi trên đã thành test (`tests/maneuver_text_test.cpp`, nay 51 kiểm tra).
+
+**Giới hạn:** đây là từ vựng app *đóng gói sẵn*. Chuỗi thực sự đưa vào
+`setInstructionVariants:` có thể do API dẫn đường sinh lúc chạy, nên log trên
+xe vẫn có thể ra cách hành văn khác — đó là lúc dòng `nav RAW` có giá trị.
+
 ### Nguyên tắc: không đoán bừa
 
 `classify()` **trả về false khi không chắc**. Câu bám đường ("Đi tiếp trên Quốc
@@ -263,8 +296,9 @@ Việc đó vẫn phải có log trên xe. Ghi chú thêm: `NaviSupported` trong
 - Chưa có log trên xe nên **chưa biết chắc khung `0x8059` có tới `jciCARPLAY`
   khi chạy VietMap hay không**. Nếu iOS không phát luồng iAP2 cho app này thì
   patch này không cứu được gì — lúc đó lỗi nằm ngoài tầm với của phía xe.
-- Chuỗi `maneuverDesc` thật của VietMap chưa được đọc lần nào; bộ từ khoá dựng
-  theo cách hành văn thường gặp. Có log rồi thì chỉnh lại cho khớp.
+- Bộ từ khoá **nay dựng từ chính từ vựng của app** (xem mục dưới), không còn
+  là đoán. Nhưng chuỗi app đưa vào `setInstructionVariants:` **có thể** do API
+  dẫn đường sinh lúc chạy, nên log trên xe vẫn có thể ra cách hành văn khác.
 - **Bản .so ARM chưa từng chạy trên xe.** Nay đã nạp được dưới đúng loader
   glibc 2.11 của xe qua `qemu-arm` (xem mục dưới), nhưng đó mới là "nạp và
   chạy constructor", không phải chạy thật trong `jciCARPLAY`.
