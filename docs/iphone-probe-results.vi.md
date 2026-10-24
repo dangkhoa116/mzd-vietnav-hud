@@ -94,3 +94,101 @@ Không kịp xác minh chuỗi có phải bộ từ vựng UTF-16LE đóng gói 
    trên 16.7).
 
 Log thô: `work/tools/vm_hooks_run1.log`, `vm_all_out.log` (ngoài repo).
+
+---
+
+# Đợt probe 2 ngày 2026-10-25 (CarPlay thật đang nối — kết luận dứt điểm Q1/Q2/Q4)
+
+Sau reboot sạch, ios-mcp và frida tự sống lại. Điện thoại mở khóa, còn nối
+CarPlay với đầu xe **cả buổi** (scene không bao giờ rơi). App VIETMAP LIVE
+build **179094172**, PID 16339 sống nguyên phiên (hết hiện tượng jetsam).
+
+## 7. Phiên CarPlay trong app (Q1/Q2/Q4 — kết luận dứt điểm)
+
+Trạng thái nhắc lại suốt phiên (ObjC.chooseSync tại nhiều thời điểm):
+
+- `CPTemplateApplicationScene=1 CPInterfaceController=1 CPWindow=1
+  CPMapTemplate=1` — app **đang là ứng dụng active trên màn hình xe**
+  (rootTemplate = topTemplate = CPMapTemplate của VietMap; 4 CPListTemplate
+  tồn tại nhưng chưa present).
+- Đã lập **3 tuyến thật** (Nhà 31 m — hoàn thành tức thì; Chợ Bến Thành;
+  Sân bay Tân Sơn Nhất, banner chỉ dẫn hiện rõ "1,2 km • Rẽ trái vào…",
+  "800 m • Rẽ trái vào…" + dòng phụ "Sau đó rẽ phải"), chạy tổng ~20 phút
+  rồi kết thúc có xác nhận dialog.
+
+Kết quả hook (script `vm_final_hooks.js` ngoài repo: 12 channel + toàn bộ
+setter CPManeuver/CPNavigationSession/CPMapTemplate + KVC lọc
+maneuver/junction/instruction + AVSpeechUtterance.setSpeechString: + 12
+method gửi của DJBTManager):
+
+- **`CPNavigationSession` KHÔNG BAO GIỜ được tạo** (0 instance khi rảnh,
+  khi 3 tuyến đang chạy, và sau khi kết thúc). `CPMapTemplate.navigationSession`
+  = nil.
+- **`CPManeuver` 0 instance tuyệt đối** → không setter nào được gọi:
+  `setInstructionVariants:`, `setManeuverType:`, `setSymbolSet:`… im lặng
+  hoàn toàn; KVC `setValue:forKey:` với key maneuver/junction/instruction
+  cũng không có.
+- Pigeon CarPlay **không hoạt động**: không một method-call nào từ
+  `CarPlayMethodChannel2`/`SwiftVIETMAPLiveNavigationPlugin` trong suốt
+  phiên (kể cả khi start/end tuyến).
+
+**Kết luận:** điều khiển từ màn hình phone, VietMap LIVE **không dùng
+CPNavigationSession/CPManeuver chút nào** — maneuver chỉ tồn tại trong cây
+widget Flutter của phone; màn hình CarPlay là bản vẽ map riêng. Muốn thấy
+CPManeuver chỉ còn khả năng lập tuyến **từ UI trên màn hình xe** (phải bấm
+trên đầu xe — ngoài tầm điều khiển từ xa). Q4 (nhịp setUpcomingManeuvers)
+theo đó không có để đo.
+
+## 8. Pipeline BLE HUD (DJBTManager) — liệt kê đủ API, xác nhận bị chặn
+
+`$methods` của DJBTManager cho đủ 12 selector gửi (frida 17 không còn
+`$ownMethods`, phải dùng `$methods` + `cls['- selector']`):
+
+- `sendNavigationInformationWithDirection:andDistance:andNextRoad:
+  andCurrentRoad:andRemainTime:andRemainDistance:andCurrentSpeed:`
+- `insideSendNavigationInformation…`, `sendCustomNavigationInformation…
+  andDirectionImage:…`, `insedeSendCustomNavigationInformation…` (typo
+  "insede" có thật trong binary), `SimplifyNavigationInformationData…`
+- `sendEndNavigationInformation`, `sendNavigationHold`, `sendHeartBeat`
+- `sendCameraInformationWithType:andDistance:andLimitSpeed:`,
+  `sendMultipleCameraInformation…Array`, `sendCustomeCameraInformation…`
+- `sendNavigationRoutePlanningWithImage:andSelectedIndex:andTitles:
+  andTimes:andDistances:andTrafficLights:andSepends:`
+
+Hook đủ 12 selector trong lúc tuyến đang chạy + lúc kết thúc tuyến:
+**KHÔNG một lần nào được gọi** (kể cả `sendEndNavigationInformation`).
+Channel `vietmap_hud_sdk` cũng chỉ có vòng lặp `startScanDevice/
+stopScanDevice` mỗi 10 s. Tức **toàn bộ pipeline phát BLE bị chặn cho tới
+khi có thiết bị HUD thật nối BLE** — hôm trước bắt được khung camera/thời
+tiết là do trạng thái app khác (đang di chuyển). Muốn bắt payload nav thật:
+bật emu ESP32 cho app nối rồi chạy xe.
+
+## 9. Bắt plaintext API tuyến — đã thử, không đi qua libboringssl
+
+`SSL_write/SSL_read` toàn cục thực chất thuộc **libboringssl.dylib của
+Apple** (findExportByName từng module; Runner export đúng 1 symbol).
+Hook đọc được plaintext nhưng toàn handshake/quản lý của hệ thống; JSON
+tuyến của VietMap chạy qua **BoringSSL static liên kết trong Dart**
+(symbol ẩn) — không hook được bằng export. Muốn lấy JSON phải pattern-scan
+binary hoặc mitm proxy (cài CA — máy đã jailbreak nên khả thi nhưng heavy).
+
+## 10. Chuỗi nguyên văn (Q3) — hiện trạng
+
+Nguồn duy nhất đạt được lúc đứng yên là banner trên màn hình phone (AI-OCR,
+dấu chưa khẳng định 100%): mẫu câu xác nhận là **"Rẽ trái vào <tên đường>"**
+kèm khoảng cách "1,2 km"/"800 m" và dòng phụ **"Sau đó rẽ phải"**. Bộ chuỗi
+đủ 10–20 mẫu nhiều loại maneuver phải chờ: (a) chạy xe với emu ESP32 nối
+BLE rồi đọc payload DJBT (tên đường UTF-8 nguyên bản từng khung), hoặc
+(b) đọc JSON tuyến (§9), hoặc (c) bấm lập tuyến từ màn hình CarPlay trên xe.
+
+## 11. Ghi chú kỹ thuật frida 17 (để lần sau không mất giờ)
+
+- `Memory.readByteArray` đã bị bỏ → dùng `ptr.readByteArray(n)`.
+- `Module.findExportByName(moduleName, sym)` tĩnh tra không ra dù export có
+  thật → dùng `module.findExportByName(sym)` trên object module.
+- Python API: `console.log` của script KHÔNG tới on_message — chèn shim
+  `console.log = function(){ send(...) }` (đã vá trong
+  `work/tools/vm_hook_runner.py`).
+- `$ownMethods` không còn — dùng `$methods` (mảng) hoặc `cls['- sel']`.
+
+Log thô đợt này: `work/tools/vm_run6.log`, `vm_final.log` (ngoài repo).
