@@ -228,3 +228,75 @@ remainingDuration, destination, backgroundColorHex`.
 2. Cách kích hoạt đường này: **bấm lập tuyến từ màn hình CarPlay trên
    đầu xe** trong lúc hooks đang chạy — sẽ bắt được Q1 (setter+giá trị),
    Q3 nguyên văn (setInstructionVariants), Q4 (nhịp setUpcomingManeuvers).
+
+---
+
+# Đợt probe 3 đêm 25-10 (lập tuyến TỪ MÀN HÌNH XE — câu trả lời Q1/Q2/Q4)
+
+Phiên quan trọng nhất: user bấm tìm đích + bắt đầu tuyến **trên màn hình
+CarPlay của đầu xe** (iPhone 8 Plus iOS 16.7.15, app 3.4.3 build 179094172,
+CarPlay wireless còn nối cả đêm).
+
+## 13. Đường CarPlay maneuver HOÀN TOÀN SỐNG khi lập tuyến từ màn xe
+
+Hook thụ động (v3 — chỉ log tên selector, zero ObjC call trong onEnter)
+bắt được trên phiên app ổn định:
+
+- **`CPManeuver setInstructionVariants:`** được gọi liên tục (hơn 1.200
+  lần trong phiên) — chuỗi chỉ dẫn có mặt.
+- **`CPManeuver setManeuverType:`** CŨNG ĐƯỢC GỌI (Q2 trả lời: CÓ) — qua
+  KVC (`setValue:forKey:@"maneuverType"`, key string có trong binary) nên
+  không thấy selector tĩnh trong plugin; hệ thống 16.7 có sẵn setter.
+- `CPManeuver setSymbolImage:`, **`CPNavigationSession
+  updateTravelEstimates:forManeuver:` ~1 Hz** (Q4: nhịp cập nhật 期望
+  ước tính mỗi giây cho từng maneuver).
+- Backtrace crash (thời điểm hook cũ còn lỗi) cho thấy chuỗi dựng maneuver
+  của app: `FLTCarPlayCarManeuver_Args.toCPManeuver(cache:)` →
+  `CPManeuver init` → KVC `setInitialDistance:` (category private
+  CPAccNavUpdate của Apple) — xác nhận app build CPManeuver từ model
+  pigeon.
+
+Tức: **mọi câu Q1/Q2/Q4 đều có dữ liệu thật; đường chuẩn CarPlay chỉ
+kích hoạt khi tuyến bắt đầu từ UI trên đầu xe** (khớp dự đoán §12).
+
+## 14. Chuỗi nguyên văn (Q3) — banner ghép với hook
+
+Ghép thời điểm `setInstructionVariants` với screenshot banner phone
+(cùng nội dung maneuver):
+
+- "350 m — Rẽ trái vào Quốc Lộ 13" / dòng phụ "sau đó Đi thẳng"
+- "900 m — Rẽ trái vào Quốc Lộ 13" / "sau đó Đi thẳng"
+- (tuyến sân bay, chiều phone-driven) "1,2 km — Rẽ trái vào …" /
+  "800 m — Rẽ trái vào …"
+
+Đủ để khẳng định cấu trúc câu: **"<khoảng cách> — <Động từ maneuver>
+vào <tên đường>"** + dòng phụ **"sau đó <maneuver kế tiếp>"**. Bộ chuỗi
+đa dạng còn thiếu vì phiên bị cắt ( xem §15).
+
+## 15. Xe ảo (giả lập GPS) — hạ tầng sẵn, chờ phiên ổn định
+
+User đứng yên ở nhà; đã viết `work/tools/vm_drive5.js` (hook
+`-[CLLocation coordinate]`, đọc/ghi struct kết quả) + `vm_gps_drive.js`
+(thay mảng vị trí trong delegate). Đêm đó frida-server kiệt sức
+(TransportError timeout khi tạo session mới sau ~10 lần attach/detach)
+nên chưa chạy được chuyến ảo; mọi script + supervisor `vm_supervisor.py`
+( tự gắn lại hooks khi app bị kill) đã sẵn sàng cho phiên sau.
+
+## 16. Bài học crash-loop (quan trọng cho phiên sau)
+
+Hook cũ gây crash app 2 lần, 2 cơ chế khác nhau:
+
+1. describe() ObjC tùy tiện trên tham số KVC/DJBT → `object_getClass`
+   segfault tại địa chỉ 0xff (giá trị direction 255 bị coi là con trỏ).
+2. safeStr gọi `ObjC.api.class_getName(isa)` → chết trong
+   `objc_class::demangledName` (Swift class demangle trên isa không hợp
+   lệ) — SIGSEGV địa chỉ rác ~0x21a2….
+
+Nguyên tắc v3 (đã chứng minh ổn định): **onEnter/onLeave KHÔNG gọi bất
+kỳ API ObjC nào** — chỉ log tên selector + con trỏ thô. Lấy giá trị
+chuỗi bằng cách ghép screenshot banner với thời điểm hook. Phiên không
+hook sống khỏe >4 phút trong khi mọi bản hook "mô tả giá trị" chết
+trong 9–21 giây.
+
+Log thô: `work/tools/vm_v3.log` (1.204 lần setInstructionVariants),
+`vm_cp2.log`, `vm_car.log` (ngoài repo).
