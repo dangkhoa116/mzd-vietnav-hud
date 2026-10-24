@@ -299,3 +299,68 @@ trong 9–21 giây.
 
 Log thô: `work/tools/vm_v3.log` (1.204 lần setInstructionVariants),
 `vm_cp2.log`, `vm_car.log` (ngoài repo).
+
+---
+
+# Đợt probe 4 (25-10, ~03:00): XE ẢO GPS — hoàn thành Q3 với 88 chuỗi nguyên văn
+
+## 17. Giả lập chuyển động — thành công toàn trình
+
+Kỹ thuật (script `work/tools/vm_drive6.js` ngoài repo): hook delegate
+**`VMLocationEngine.LocationEngine`** (delegate thật của engine vị trí
+VietMap — tìm bằng cách quét mọi class implement
+`locationManager:didUpdateLocations:`, rút kinh nghiệm đêm trước quét dừng
+ở match đầu bỏ sót). Mỗi lần hệ thống đẩy vị trí, thay mảng CLLocation
+bằng object tạo tại tọa độ giả đi thẳng về đích (Chợ Bến Thành) 28 m/lần.
+App nhận là GPS thật — dialog "Thông tin GPS" báo **"GPS Mạnh"**.
+Chi tiết ABI đã giải: `coordinate()` trả [lat, lon] (mảng); selector 2
+tham số thì mảng vị trí nằm ở `args[3]` (args[2] là CLLocationManager).
+
+Xe ảo chạy từ nhà (Bình Dương) 48 km về Quận 1 trong ~30 phút, đi qua
+đầy đủ loại đường; app tự re-route khi đi thẳng gãy tuyến (ra cả chuỗi
+"lệch tuyến"/"tính lại").
+
+## 18. Kết luận kiến trúc chuỗi chỉ dẫn CarPlay (Q3 — câu trả lời cuối)
+
+Hook đọc giá trị (`vm_strings.js`, ngoài repo — hook HẸP chỉ
+setInstructionVariants:/setUpcomingManeuvers:, đọc NSArray/NSString của
+chính app truyền vào: an toàn, chạy ổn >30 phút):
+
+- **`instructionVariants` = TÊN ĐƯỜNG/ĐIỂM MỐC, KHÔNG có động từ**.
+  Câu đầy đủ ("Rẽ trái vào Quốc Lộ 13") chỉ tồn tại trên UI phone; sang
+  CarPlay app gửi symbol (setSymbolImage:/setSymbolSet:) + tên đường.
+  Đây là mô hình GIỐNG HỆT protocol BLE HUD (direction byte + tên đường)
+  — xác nhận lần nữa hướng thiết kế bridge của ta đúng bản chất app.
+- Phone UI khi có CarPlay: chỉ hiện "bảng 9 ô" điều khiển map trên xe
+  (user xác nhận: banner chỉ vẽ trên màn CarPlay).
+
+Bộ 88 chuỗi nguyên văn (file đầy đủ `work/tools/out/q3_strings_final.txt`
+ngoài repo; đếm = số lần setInstructionVariants nhận giá trị đó):
+
+- Đường lớn: `Mỹ Phước Tân Vạn` (260), `Đại Lộ Bình Dương` (53),
+  `Cách Mạng Tháng 8` (38), `Hà Huy Giáp`, `Phan Văn Trị`, `Lê Văn Duyệt`,
+  `Nguyễn Thị Minh Khai`, `Võ Thị Sáu`, `Lê Duẩn`, `Tôn Đức Thắng`,
+  `Đào Duy Anh`, `Nơ Trang Long`, `Phan Đăng Lưu`, `Vườn Lài`, `Huỳnh Đình Hai`…
+- Đường số/hẻm: `Thạnh Xuân 38`, `Thạnh Lộc 29`, `Nhị Bình 8`,
+  `An Sơn 1`, `Hẻm 198 Thạnh Xuân 52` (hẻm + số nhà!), `Đường Số 1`.
+- Công nghiệp Bình Dương: `Đường NA3/NA4/NA7/N7/DA4/NK9/KH1/DL14/NL12/DJ5`,
+  `NJ 12`, `ĐX 78`.
+- Điểm mốc: `Cầu`, `Cầu An Phú Đông`, `Bùng Binh` (vòng xoay).
+- Đặc biệt: **`Đường Không Tên`** (46 lần — đường không tên là chuỗi
+  THẬT, không phải rỗng), **chuỗi rỗng ""** (10 lần — HUD phải xử lý),
+  và `null` (1.207 lần — update không kèm text).
+- Chuỗi hệ thống: `Đi theo đường dẫn trên bản đồ`, `Bạn đang đi lệch
+  khỏi tuyến đường`, `Đang tính toán tuyến đường...`.
+- Đích đến gần nhất: `Lê Duẩn || Tôn Đức Thắng` (setUpcomingManeuvers
+  n=2 — luôn kèm 2 maneuver kế tiếp).
+
+Tất cả giữ nguyên dấu tiếng Việt; encode UTF-8 qua NSArray nguyên bản.
+
+## 19. Trạng thái cuối
+
+Đáp ứng đủ mục 6 của docs/iphone-probe.vi.md: model+iOS ✓, thông tin
+CarPlay ✓ (scene + banner vẽ trên màn xe), setter list ✓ (Q1/Q2),
+nhịp session ✓ (Q4: updateTravelEstimates ~1 Hz), chuỗi nguyên văn ✓
+(88 >> 10–20 yêu cầu). Còn thiếu duy nhất: JSON route API (Dart BoringSSL
+static, đã ghi rõ §9) và đối chứng direction khi maneuver thật đổi
+(cần xe chạy thật với emu BLE).
