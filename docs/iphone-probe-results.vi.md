@@ -248,8 +248,7 @@ bắt được trên phiên app ổn định:
   KVC (`setValue:forKey:@"maneuverType"`, key string có trong binary) nên
   không thấy selector tĩnh trong plugin; hệ thống 16.7 có sẵn setter.
 - `CPManeuver setSymbolImage:`, **`CPNavigationSession
-  updateTravelEstimates:forManeuver:` ~1 Hz** (Q4: nhịp cập nhật 期望
-  ước tính mỗi giây cho từng maneuver).
+  updateTravelEstimates:forManeuver:` ~1 Hz** (Q4: nhịp cập nhật ước tính mỗi giây cho từng maneuver).
 - Backtrace crash (thời điểm hook cũ còn lỗi) cho thấy chuỗi dựng maneuver
   của app: `FLTCarPlayCarManeuver_Args.toCPManeuver(cache:)` →
   `CPManeuver init` → KVC `setInitialDistance:` (category private
@@ -271,7 +270,7 @@ Ghép thời điểm `setInstructionVariants` với screenshot banner phone
 
 Đủ để khẳng định cấu trúc câu: **"<khoảng cách> — <Động từ maneuver>
 vào <tên đường>"** + dòng phụ **"sau đó <maneuver kế tiếp>"**. Bộ chuỗi
-đa dạng còn thiếu vì phiên bị cắt ( xem §15).
+đa dạng còn thiếu vì phiên bị cắt (xem §15).
 
 ## 15. Xe ảo (giả lập GPS) — hạ tầng sẵn, chờ phiên ổn định
 
