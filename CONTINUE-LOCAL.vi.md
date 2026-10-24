@@ -4,6 +4,28 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## Cập nhật 25-10 (~03:30): nhiệm vụ probe iPhone HOÀN THÀNH 100%
+
+Kết quả đầy đủ trong `docs/iphone-probe-results.vi.md` (mục 7–19, commits
+4ad7183 → b3b7d11). Tóm tắt:
+
+- **Q1/Q2/Q4**: lập tuyến TỪ MÀN HÌNH XE kích hoạt đường CarPlay chuẩn —
+  setInstructionVariants:, setManeuverType: (qua KVC), setSymbolImage:,
+  CPNavigationSession updateTravelEstimates: ~1 Hz. App dựng CPManeuver bằng
+  `FLTCarPlayCarManeuver_Args.toCPManeuver(cache:)`.
+- **Q3**: XE ẢO GPS (hook `VMLocationEngine.LocationEngine`, tool đã lưu ở
+  `tools/iphone-probe/vm_drive6.js`) chạy 48 km → **88 chuỗi nguyên văn**
+  (`tools/iphone-probe/q3_strings_final.txt`). Kiến trúc: instructionVariants
+  = TÊN ĐƯỜNG/ĐIỂM MỐI (không động từ; "Rẽ trái vào…" chỉ ở UI phone);
+  có "Đường Không Tên", chuỗi rỗng "", null — HUD/bridge phải xử lý cả 3.
+- **Phone UI khi CarPlay nối** = bảng 9 ô pad điều khiển map xe; banner chỉ
+  vẽ trên màn CarPlay (user xác nhận).
+- **Bài học crash**: tool hook KHÔNG được gọi ObjC API trên tham số tùy tiện
+  (2 cơ chế segfault — xem README tools/iphone-probe).
+- Còn lại (đều cần xe/user): chạy xe thật + emu ESP32 (direction khi maneuver
+  thật + kích hoạt pipeline DJBT BLE), cài debug CarPlay lên CMU, radio test
+  ATT native, tạo secret EMU_TOKEN cho CI, live replay hud-dbus-tap.py.
+
 ## Cập nhật 22-10 (tối muộn hơn nữa): CI Linux chạy toàn bộ test mỗi push
 
 Máy Windows không có gcc/qemu-user/WSL (không quyền admin) nên mọi thứ cần
