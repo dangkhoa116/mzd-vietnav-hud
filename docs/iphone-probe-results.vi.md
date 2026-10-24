@@ -192,3 +192,39 @@ BLE rồi đọc payload DJBT (tên đường UTF-8 nguyên bản từng khung),
 - `$ownMethods` không còn — dùng `$methods` (mảng) hoặc `cls['- sel']`.
 
 Log thô đợt này: `work/tools/vm_run6.log`, `vm_final.log` (ngoài repo).
+
+## 12. Bổ sung quan trọng 25-10 tối: đường CPNavigationSession CÓ trong binary
+
+Sửa lại phần suy đoán ở §7 (đã tránh nói sai trong doc nhưng cần chốt bằng
+bằng chứng tĩnh): kiểm tra chuỗi selector trong
+`vietmap_live_navigation_plugin.framework` bằng Python (lưu ý: `grep -r`
+trên Git Bash **bỏ sót file binary** — phải quét byte bằng Python):
+
+- **CÓ**: `setInstructionVariants:`, `setUpcomingManeuvers:`,
+  `startNavigationSessionForTrip:`, `setSymbolImage:`, `setSymbolSet:`,
+  `updateTravelEstimates:forManeuver:`, `CPManeuverDisplayStyle`,
+  `_objc_msgSend$startNavigationSessionForTrip:`,
+  `_objc_msgSend$upcomingManeuvers:`
+- **KHÔNG có**: `setManeuverType:` (app build bằng SDK cũ — API 17.4+
+  không được biên dịch vào; **iOS 17 cũng không gọi được**),
+  `presentNavigationSession`.
+
+Tức app **có sẵn toàn bộ đường CarPlay navigation chuẩn** (tạo session từ
+`startNavigationSessionForTrip:` → dựng CPManeuver bằng
+`setInstructionVariants:`/`setSymbolImage:` → `setUpcomingManeuvers:` →
+`updateTravelEstimates:`), nhưng đường đó **không chạy khi lập tuyến từ
+phone** — khả năng lớn nó chỉ kích hoạt từ handler
+`mapTemplate:startedTrip:using:` khi bấm bắt đầu tuyến **trên màn hình
+xe**. Ngoài ra app còn có model maneuver riêng cho màn CarPlay:
+`FLTCarPlayCarManeuver_Args` (pigeon) với các trường
+`instruction, modifier, degrees, distance, imageId, lanesImageId,
+nextStepInstruction, nextStepImageId, remainingDistance,
+remainingDuration, destination, backgroundColorHex`.
+
+**Hệ quả thực tế:**
+1. Không cần (và không có cách) giả lập iOS 17 — mọi selector then chốt
+   đều iOS 12+, chạy được trên 16.7; riêng maneuverType không nằm trong
+   app nên phiên bản iOS không đổi gì.
+2. Cách kích hoạt đường này: **bấm lập tuyến từ màn hình CarPlay trên
+   đầu xe** trong lúc hooks đang chạy — sẽ bắt được Q1 (setter+giá trị),
+   Q3 nguyên văn (setInstructionVariants), Q4 (nhịp setUpcomingManeuvers).
