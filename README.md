@@ -20,7 +20,7 @@ The [SDK notes](docs/vietmap-hud-sdk.md) correct the old checksum description
 and distinguish evidence of a permission flow from an unverified claim that
 every emulated HUD is rejected. The existing CarPlay bridge works with Google
 Maps/Apple Maps on the tested car; VML 3.4.3 does not supply the needed CarPlay
-metadata. The BLE prototype is separate from the 0.9.2 USB installer.
+metadata. The BLE prototype is separate from the 0.9.3 USB installer.
 
 The [native CMU implementation](native/README.md) reuses the TPMS HCI mux for
 advertising, one peripheral connection, GATT and HUDInfo exchange. It builds

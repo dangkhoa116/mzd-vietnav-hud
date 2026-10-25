@@ -48,6 +48,20 @@ ps 2>/dev/null | grep -E "aap|AAPA|blmj|jcinavi|jciCARPLAY|sm -f" | grep -v grep
     fi
     if grep -q "TPMS bds wrapper" /jci/bds/bds 2>/dev/null; then echo "TPMS bds wrapper: installed"; else echo "TPMS bds wrapper: no"; fi
     if grep -q "tpms-boot" /jci/scripts/stage_wifi.sh 2>/dev/null; then echo "TPMS boot hook: installed"; else echo "TPMS boot hook: no"; fi
+    # Presence and permissions only: never source AIO code or repair shared files.
+    for f in /jci/gui/apps/system/js/systemApp.js \
+             /jci/gui/common/controls/List2/js/List2Ctrl.js \
+             /jci/gui/apps/system/controls/MainMenu/js/MainMenuCtrl.js \
+             /jci/gui/framework/js/Utility.js \
+             /data/integration/developer_mode_GuiConfig.js \
+             /jci/scripts/stage_wifi.sh; do
+        [ -f "$f" ] || continue
+        ls -l "$f"
+        md5sum "$f"
+        if grep -q -e CASDK -e CustomApplicationsProxy -e 'Patched for AIO' "$f"; then
+            echo "AIO/CASDK marker: $f"
+        fi
+    done
 } > "$STAGE/other-kits.txt"
 mount | grep -E "/mnt/sd|data_persist" > "$STAGE/mounts.txt"
 # every mod's preload in the sm configs, and what those folders hold (md5),

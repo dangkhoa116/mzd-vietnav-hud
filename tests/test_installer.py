@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 import tempfile
 import time
 
@@ -976,8 +977,41 @@ def host_tests():
           "KHONG HO TRO / NOT SUPPORTED" in log and "CAI DAT LOI" not in log and c.tree() == before, log)
 
 
+def aio_compat_tests():
+    c = Car(wcp_conf=True)
+    guard(c)
+    shared = list(OTHER_KITS) + [
+        "jci/gui/apps/system/js/systemApp.js",
+        "jci/gui/common/controls/List2/js/List2Ctrl.js",
+        "jci/gui/apps/system/controls/MainMenu/js/MainMenuCtrl.js",
+        "jci/gui/framework/js/Utility.js",
+    ]
+    for path in shared:
+        c.write(path, b"// Patched for AIO + CASDK apps\n// CustomApplicationsProxy sentinel\n")
+        os.chmod(os.path.join(c.t, path), 0o755 if path.endswith(".sh") else 0o644)
+    before = {p: (c.read(p), os.stat(os.path.join(c.t, p)).st_mode) for p in shared}
+    for args in ([], ["all", "--yes"]):
+        rc, out = c.run("usb/vietnav-install.sh", *args)
+        check("AIO: install %s succeeds" % args, rc == 0, out)
+    rc, out = c.run("usb/vietnav-rollback.sh", "all")
+    check("AIO: rollback succeeds", rc == 0, out)
+    check("AIO: shared file bytes and modes survive dry run/install/rollback",
+          all((c.read(p), os.stat(os.path.join(c.t, p)).st_mode) == before[p] for p in shared))
+    rc, out = c.run("usb/vietnav-collect.sh")
+    import tarfile
+    packs = list(Path(c.t, "usb").glob("vietnav-collect-*.tgz"))
+    if rc == 0 and packs:
+        with tarfile.open(packs[0]) as pack:
+            report = pack.extractfile("vietnav-collect/other-kits.txt").read().decode()
+        check("AIO: collector records markers and boot script permissions",
+              "AIO/CASDK marker:" in report and "stage_wifi.sh" in report and "-rwxr-xr-x" in report, report)
+    else:
+        check("AIO: collector succeeds", False, out)
+
+
 def main():
     print("shell:", " ".join(SH))
+    aio_compat_tests()
     install_tests()
     oldcp_tests()
     host_tests()

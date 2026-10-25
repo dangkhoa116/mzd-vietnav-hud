@@ -18,7 +18,7 @@ Phần cấp quyền vẫn cần xác minh; phân tích lại đã sửa lỗi m
 nhận định quá chắc trong [tài liệu SDK](docs/vietmap-hud-sdk.md).
 
 Trên xe, Google Maps/Apple Maps đã được xác nhận qua bridge CarPlay; VML 3.4.3
-chưa gửi metadata cần cho bridge đó. Bản thử BLE chưa nằm trong kit USB 0.9.2.
+chưa gửi metadata cần cho bridge đó. Bản thử BLE chưa nằm trong kit USB 0.9.3.
 
 Đã bổ sung [nhánh native CMU](native/README.md), dùng HCI của TPMS để quảng bá,
 nhận kết nối và phục vụ GATT. Có bản ARM glibc 2.11: 70 test host, 229 kiểm tra
