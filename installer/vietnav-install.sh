@@ -68,7 +68,7 @@ LOG=/tmp/vietnav-install.log
 TAG="[vietnav]"
 # The kit version (x.y.z): the same as VERSION in the repo - build-kit.py
 # refuses a kit where they differ. The touch menu reads it from here.
-VIETNAV_VERSION="0.9.1"
+VIETNAV_VERSION="0.9.2"
 WDOG="/sys/class/gpio/Watchdog Disable/value"
 SM=/jci/sm/sm.conf
 SMW=/jci/sm/sm_WCP.conf

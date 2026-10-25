@@ -4,6 +4,37 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## Cập nhật 25-10 (~05:00): KIT 0.9.2 SẴN SÀNG — HUD như Google Maps chờ 1 buổi trên xe
+
+Đóng góp mới nhất từ probe: ngoài `setManeuverType:` qua KVC, còn phát hiện
+**tuyến bắt đầu từ phone tạo 0 phiên CarPlay** — lần test HUD trên xe trước
+đó có thể sai ngay từ bước này (đã ghi vào
+`docs/carplay-vietmap-hud-gap.vi.md` §2b và STEPS của kit).
+
+**Kit đã dựng sẵn trên máy này** (không commit — binary):
+
+- `installer/dist/0.9.2/` — bản cập nhật HẰNG NGÀY: cầu CarPlay là
+  `out/carplay-arm-m3/release/libpatch-blmjcicarplay.so` (m3-toolchain,
+  **CÓ bản vá fallback suy hướng rẽ từ chữ** khi maneuverType trên khung
+  0x8059 là 0 — bộ từ cuối cùng có `hoi lech`, `tiep tuc di thang`).
+- `installer/dist/VIETNAV-HUD-0.9.2-DEBUG-USB.zip` — bản DEBUG lấy log
+  (`nav PICK`/`nav TEXT-FALLBACK` ra `/tmp/carplay_bridge.log`), kèm
+  `0-BAN-DEBUG.txt` hướng dẫn. Manifest md5 cả hai kit đã kiểm PASS.
+
+CẢNH BÁO ĐÓNG GÓI (quét token `bung binh`/`hoi lech`): `out/carplay-arm/
+release` (zig) **KHÔNG có bản vá** (0/7), `out/carplay-arm/debug` (zig) là
+vá CŨ thiếu 2 cặp từ — chỉ dùng `out/carplay-arm-m3/*`.
+
+Kit không chứa trigger TouchTune (không còn trên máy) và không chứa payload
+AA (không có nguồn oem-aa-mod ở đây): **chép đè nội dung `dist/0.9.2/` lên
+cây USB đã dùng cài 0.9.1** (USB đã có trigger + đã cài AA trên xe) là đủ.
+File mới toàn tên ngắn, không vướng MAX_PATH.
+
+Buổi trên xe kế tiếp (theo thứ tự trong `0-BAN-DEBUG.txt`): cài bản DEBUG →
+chạy Google Maps trước (đối chứng) → **VietMap bắt đầu tuyến NGAY TRÊN MÀN
+HÌNH XE**, chạy 5–10 phút có 2–3 lần rẽ → NHỚ TẮT MÁY TRƯỚC KHI THU THẬP →
+bấm THU THẬP lấy `.tgz` → về nhà cài bản 0.9.2 daily + phân tích log.
+
 ## Cập nhật 25-10 (~03:30): nhiệm vụ probe iPhone HOÀN THÀNH 100%
 
 Kết quả đầy đủ trong `docs/iphone-probe-results.vi.md` (mục 7–19, commits

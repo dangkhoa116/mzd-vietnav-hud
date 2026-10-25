@@ -22,8 +22,12 @@ CAI DAT (bam cam ung, khong can ban phim)
      10 phut, no may lai. iPhone chi biet xe nhan dan duong
      (NaviSupported) sau mot lan khoi dong moi. Roi:
        AA:      cam dien thoai Android, mo dan duong
-       CARPLAY: ket noi iPhone, mo dan duong (Apple Maps hoac
-                VIETMAP LIVE)
+       CARPLAY: ket noi iPhone, mo dan duong. Apple Maps bat dau dau
+                cung duoc. VOI VIETMAP LIVE: phai TIM VA BAM "BAT DAU"
+                NGAY TREN MAN HINH XE - tuyen bat dau tu dien thoai
+                KHONG tao phien CarPlay dan duong (da chung minh bang
+                hook tren iPhone jailbreak: 0 doi tuong maneuver),
+                nen khong co gi cho HUD ca.
      HUD se hien mui ten + khoang cach; ten duong tu dong fold dau
      tieng Viet cho vua font HUD.
 

@@ -75,6 +75,32 @@ lệnh (`maneuverDesc`) thay vì vứt đi. Chỉ `type == 0` được xét lạ
 43 kiểm tra host (gồm nhóm câu **phải bị từ chối** như "Đi tiếp trên Quốc Lộ 13",
 để không dán mũi tên sai suốt cả chặng).
 
+## 2b. Cập nhật 25-10: hai điều chỉnh sau đợt probe iPhone jailbreak
+
+Đợt probe 4 phiên (xem `docs/iphone-probe-results.vi.md` §7–19) điều chỉnh
+giả thuyết trên ở hai điểm, không bác nó:
+
+1. **Điều kiện tiên quyết mới — tuyến phải bắt đầu từ MÀN HÌNH XE.** Hook
+   toàn bộ plugin cho thấy: tuyến bắt đầu trên phone tạo 0 phiên CarPlay
+   dẫn đường (0 instance `CPNavigationSession`/`CPManeuver`); chỉ khi tìm
+   điểm và bấm bắt đầu ngay trên màn hình CarPlay thì
+   `startNavigationSessionForTrip:` → `setInstructionVariants:` (1200+ lần)
+   → `updateTravelEstimates:forManeuver:` (~1 Hz) mới chạy đầy đủ. Lần test
+   trên xe trước đó có thể dừng ngay từ bước này — không có khung nào cho
+   bridge đọc, bất kể maneuverType.
+2. **App CÓ đặt maneuverType lúc chạy** — qua KVC
+   `setValue:forKey:@"maneuverType"` (selector không được compile vào binary
+   nên quét tĩnh không thấy, xem probe-results §14). Giá trị đó có tới khung
+   `0x8059` hay không là điều bản debug trả lời trực tiếp bằng dòng
+   `nav PICK`; bản vá fallback chỉ áp dụng khi giá trị trên khung thật sự
+   là 0, nên đúng trong mọi trường hợp.
+
+Lưu ý đóng gói (phát hiện khi quét token bảng từ: `bung binh`, `hoi lech`,
+`tiep tuc di thang`): bản `out/carplay-arm/release` (build zig 23-10)
+**KHÔNG chứa bản vá** (0/7 token), còn `out/carplay-arm/debug` là bản vá cũ
+thiếu cặp từ `hoi lech` / `tiep tuc di thang`. Kit 0.9.2 phải đóng từ
+`out/carplay-arm-m3/{debug,release}` — bản m3 mới đủ bảng từ cuối cùng.
+
 ## 3. Thứ bắt buộc phải có log trên xe
 
 Câu hỏi duy nhất còn lại là: **với VietMap, khung `0x8059`/`0x8058` có tới

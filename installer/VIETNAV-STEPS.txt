@@ -22,8 +22,12 @@ INSTALL (touch, no keyboard)
      about 10 minutes, start it again. The iPhone is only told the car
      takes navigation (NaviSupported) on a fresh start. Then:
        AA:      plug in an Android phone, start navigation
-       CARPLAY: connect an iPhone, start navigation (Apple Maps or
-                VIETMAP LIVE)
+       CARPLAY: connect an iPhone, start navigation. Apple Maps can be
+                started anywhere. WITH VIETMAP LIVE: search and press
+                start ON THE CAR SCREEN - a route started on the phone
+                never creates a CarPlay navigation session (proven by
+                hooks on a jailbroken iPhone: zero maneuver objects),
+                so there is nothing for the HUD.
      The HUD should show the turn arrow + distance; street names fold
      Vietnamese diacritics to the HUD font automatically.
 

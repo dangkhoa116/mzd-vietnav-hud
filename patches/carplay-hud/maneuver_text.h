@@ -17,6 +17,12 @@
 // maneuvers therefore arrives as type 0 and is discarded, so the HUD stays blank
 // while Google Maps (which does set the type) works.
 //
+// Update 2026-10-25: at RUN time the app does assign maneuverType through KVC
+// (`setValue:forKey:@"maneuverType"`, see docs/iphone-probe-results.vi.md §14) —
+// the selector is simply not compiled in. Whether that value survives into the
+// iAP2 0x8059 burst is exactly what the debug kit measures; this fallback only
+// fires when the value on the wire is really 0, so it stays correct either way.
+//
 // The text is still there, so recover the turn from it. This is additive: it
 // only runs where the bridge would otherwise display nothing.
 //

@@ -140,9 +140,15 @@ def payload_map():
                             "mzd-vietnav-hud (this repo)")
     cp = pick_cp_source()
     if cp:
-        out["libpatch-blmjcicarplay.so"] = (
-            cp, "mazda-carplay-hud (KidMixer) via mazda-hud-toolkit ilshyma build "
-                "(km/h fix + VN fold), AGPL-3.0")
+        if os.environ.get("VIETNAV_CP_HUD"):
+            # A build supplied through the env is ours (mazda-carplay-hud +
+            # patches/carplay-hud), not the stock ilshyma one.
+            origin = ("mazda-carplay-hud + patches/carplay-hud (this repo), "
+                      "VIETNAV_CP_HUD build, AGPL-3.0")
+        else:
+            origin = ("mazda-carplay-hud (KidMixer) via mazda-hud-toolkit ilshyma build "
+                      "(km/h fix + VN fold), AGPL-3.0")
+        out["libpatch-blmjcicarplay.so"] = (cp, origin)
     return out
 
 

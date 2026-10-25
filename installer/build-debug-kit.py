@@ -58,9 +58,13 @@ CACH LAM
      roi bao lai. Khong can lam tiep buoc 4.
 
 4. Mo VIETMAP LIVE, DAN DUONG MOT DOAN THAT (co re it nhat 2-3 lan).
-   Khoang 5-10 phut la du. Dung yen mot cho thi khong co du lieu.
-   VietMap CO THE VAN CHUA HIEN tren kinh lai - khong sao, dung la vay,
-   thu can lay la file log o buoc 5.
+   QUAN TRONG: TIM DIEM VA BAM BAT DAU NGAY TREN MAN HINH XE (CarPlay),
+   KHONG bat dau tren dien thoai - tuyen bat dau tu dien thoai khong
+   tao phien CarPlay dan duong (da chung minh bang hook: 0 doi tuong
+   maneuver) nen log se rong va ket luan sai. Khoang 5-10 phut la du.
+   Dung yen mot cho thi khong co du lieu. VietMap CO THE VAN CHUA HIEN
+   tren kinh lai - khong sao, dung la vay, thu can lay la file log o
+   buoc 5.
 
 5. VAN DE NGUYEN MAY, KHONG TAT XE. Cam USB vao, bam nut "THU THAP".
    No luu file vietnav-collect-<ngay>.tgz ngay tren USB.
