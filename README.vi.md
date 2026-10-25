@@ -10,21 +10,22 @@
 
 ## Đang phát triển: giả lập HUD VietMap
 
-Đã có bản thử `VIETNAV HUD` trên Linux/BlueZ và decoder lấy hướng rẽ, khoảng
-cách, tên đường, camera từ giao thức HUD rời trong IPA VML 3.4.3. Đã qua 21
-test codec/CLI/D-Bus; **chưa xác nhận app chấp nhận qua BLE thật và chưa nối
-nhánh này lên HUD Mazda**. [Cách chạy và phần còn thiếu](docs/hud-emulator.md).
-Phần cấp quyền vẫn cần xác minh; phân tích lại đã sửa lỗi mô tả checksum và
-nhận định quá chắc trong [tài liệu SDK](docs/vietmap-hud-sdk.md).
+Đã có bản thử Linux/BlueZ và decoder giao thức HUD của VML 3.4.3.
+**App iOS 3.4.3 đã chấp nhận emulator ESP32-C3, hoàn tất HUDInfo và bắt đầu
+streaming**, theo [probe điện thoại](docs/hud-dart-layer-analysis.vi.md).
+Kết quả đó chưa xác nhận đường radio Linux/BlueZ, native CMU hay output HUD
+Mazda. Xem [hướng dẫn BLE](docs/hud-emulator.md).
 
-Trên xe, Google Maps/Apple Maps đã được xác nhận qua bridge CarPlay; VML 3.4.3
-chưa gửi metadata cần cho bridge đó. Bản thử BLE chưa nằm trong kit USB 0.9.2.
+Google Maps/Apple Maps đã chạy qua bridge CarPlay trên xe thử. Các
+[probe iPhone](docs/iphone-probe-results.vi.md) đã thấy session, cập nhật
+maneuver và maneuverType đặt qua KVC khi **bắt đầu tuyến trên màn hình xe**.
+Chưa xác minh dữ liệu iAP2 `0x8059/0x8058` dùng được có tới bridge trên xe hay
+không. Nhánh BLE tách riêng khỏi bộ cài USB 0.9.3.
 
-Đã bổ sung [nhánh native CMU](native/README.md), dùng HCI của TPMS để quảng bá,
-nhận kết nối và phục vụ GATT. Có bản ARM glibc 2.11: 70 test host, 229 kiểm tra
-mux và 5 test transport ARM/QEMU pass. Có [USB thử riêng](native/usb/README.md)
+[Nhánh native CMU](native/README.md) dùng HCI của TPMS để quảng bá và phục vụ
+GATT/HUDInfo. Đường guidance → VBS đã có code và test host; radio native và
+output HUD trên xe chưa được xác minh. Có [USB thử riêng](native/usb/README.md)
 kiểm tra trước khi kết nối, chạy một lần, thu log và khôi phục TPMS.
-Chưa thử BLE thật và chưa nối output VBS cho nhánh này.
 
 Với board **ESP32-C3 Mini** đang có, dùng [firmware và hướng dẫn lấy
 log](emu/esp32-hud-emu/README.vi.md). Đã build cả bản quảng bá legacy mặc định
@@ -105,10 +106,10 @@ tests/
 
 Bộ installer dùng đúng cơ chế TouchTune USB như các kit khác trên xe này: cắm
 dia → bấm INSTALL trên hộp thoại cập nhật → menu tiếng Việt. Không cần bàn
-phím. Kit mang **sẵn cả hai mod**:
-
-- **AA** — binary bản release 0.10.0 của oem-aa-mod (Android Auto → HUD, GAL 1.6)
-- **CARPLAY** — bridge mazda-carplay-hud (bản ilshyma: fix km/h + fold tiếng Việt)
+phím. Builder hỗ trợ AA và CarPlay khi có đủ payload tương ứng.
+**ZIP 0.9.3 DEBUG vừa dựng trên máy chỉ có payload CarPlay m3 DEBUG đã vá,
+kèm chẩn đoán AIO/CASDK; không có binary AA và trigger TouchTune.** Chép đè
+lên USB cũ đã có TouchTune. ZIP là artifact local, không nằm trong Git.
 
 Menu: `CAI DAT` → chọn **AA / CARPLAY / CA HAI** rồi xác nhận · `THU THAP` →
 gói chẩn đoán ra dia · `GO BO` → xác nhận rồi gỡ phần đã cài. Nguồn gốc + md5
@@ -223,27 +224,34 @@ nhau, không kit nào làm hỏng phần của kit khác.
 
 ## Trạng thái & lộ trình
 
-- [x] Phân tích tĩnh VIETMAP LIVE (Android `updateTrip(Trip)` — đã xác nhận; iOS
-      `startNavigationSession` + `CPMapTemplate` — đã xác nhận)
-- [x] Chẩn đoán khoản trống tên đường + quy trình phân xử trên xe
-- [x] Bản vá road-budget + host test
-- [x] Bộ cài chạm cho firmware VN (74.00.331): AA mod + CarPlay bridge cùng một
-      dia TouchTune, có gỡ cài và chế độ thu thập chẩn đoán; launcher dùng
-      chung sống cùng kit TPMS và kit CarPlay không dây
-- [x] Kiểm tra trên máy: 120 bài test với CMU giả lập, gồm round-trip cài/gỡ trên
-      chính file sm cấu hình thật của xe và mọi hộp thoại được soi lại với những
-      gì binary jci-dialog của xe thật sự hiển thị được
-- [ ] Buổi chạy xe: AA, rồi CarPlay (chỉ THU THAP khi có lỗi) — xác nhận trên
-      74.00.331 và đọc hành vi tên đường với VIETMAP LIVE (`road="--"` sẽ chốt
-      giả thuyết H1; cần bản build debug)
-- [ ] Build binary AA đã vá (road budget 64→256) bằng m3 toolchain; kit hiện ship
-      binary upstream 0.10.0, bản vá nằm ở [patches/](patches/oem-aa-mod/) dạng
-      nguồn
-- [ ] Đóng góp bản vá ngược lên upstream oem-aa-mod
+Cập nhật 25-10-2026; phiên bản kit **0.9.3**.
+
+- [x] Bản vá nguồn AA road-budget (64→256) và test host.
+- [x] Probe iPhone: vòng đời session/maneuver CarPlay, maneuverType qua KVC
+      và 88 chuỗi instruction; tuyến phải bắt đầu trên màn hình xe.
+- [x] Fallback CarPlay từ chữ và build m3 DEBUG có log `nav PICK` /
+      `nav TEXT-FALLBACK`; output VietMap trên xe chưa xác minh.
+- [x] ZIP 0.9.3 DEBUG local: đã kiểm MD5 payload, phiên bản, collector mới
+      và thư viện m3 DEBUG. Không kèm payload AA hoặc trigger TouchTune.
+- [x] Chẩn đoán AIO/CASDK và giữ nguyên byte/quyền file dùng chung: toàn bộ
+      test installer CMU giả trên PC/WSL đạt. Cú pháp qua BusyBox ARM 1.19.2
+      của firmware bằng QEMU đạt. Test cấu hình sm thật là tuỳ chọn
+      (`VIETNAV_REAL_SM`), không chạy lại trong lần này.
+- [x] iOS đã chấp nhận emulator BLE ESP32-C3 và streaming. Guidance/VBS native
+      CMU có test host; radio native và output HUD vẫn cần thử trên xe.
+- [ ] **Tiếp theo: thử 0.9.3 DEBUG trên 74.00.331.** Chạy Google Maps đối chứng,
+      rồi tìm điểm/bắt đầu VietMap **trên màn hình CarPlay**, đi qua 2–3 lần
+      rẽ và luôn THU THẬP **trước khi tắt máy xe**.
+- [ ] Đọc `nav PICK`, log fallback và khung iAP2; xác nhận riêng mũi tên,
+      khoảng cách, tên đường, kết thúc dẫn đường. Sau đó kiểm bản daily.
+- [ ] Thử cùng AIO trên xe; test PC chưa chứng minh tương thích thực tế.
+- [ ] Build/kiểm binary AA đã vá bằng m3, thử AA trên xe và gửi bản vá
+      road-budget upstream. Binary này không nằm trong kit 0.9.3 vừa dựng.
+- [ ] Tiếp tục thử radio/VBS native CMU riêng với kit CarPlay.
 
 ## Phiên bản
 
-Ghi trong `VERSION`, mỗi bản có tag `vx.y.z`. Hộp thoại cài hiện bản trên USB ở
+Ghi trong `VERSION`, tag phát hành dùng `vx.y.z` khi được công bố. Hộp thoại cài hiện bản trên USB ở
 tiêu đề và bản đang cài ở dòng trạng thái (`DA CAI AA / installed 0.9.0`); các
 log trên USB cũng ghi số bản, và khi cài xong số bản được lưu ở
 `/data_persist/vietnav/version` (THU THAP có lấy file này). Đổi bản: sửa cùng lúc

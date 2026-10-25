@@ -12,22 +12,24 @@ English | [Tiếng Việt](README.vi.md)
 
 The Linux/BlueZ `VIETNAV HUD` prototype and offline decoder implement the HUD
 wire formats found in the supplied VML 3.4.3 IPA, including navigation, road
-names and camera data. All 21 codec/CLI/D-Bus tests pass. **Phone acceptance over
-real BLE and Mazda HUD output for this path remain unverified.** See the
-[runbook and remaining work](docs/hud-emulator.md) (Vietnamese).
+names and camera data. Codec/CLI/D-Bus tests cover the Linux prototype.
+**iOS 3.4.3 accepted the ESP32-C3 emulator, completed HUDInfo and began
+streaming** in the [phone probe](docs/hud-dart-layer-analysis.vi.md).
+This does not validate the Linux/BlueZ or native CMU radio paths, or Mazda HUD
+output. See the [BLE runbook](docs/hud-emulator.md).
 
-The [SDK notes](docs/vietmap-hud-sdk.md) correct the old checksum description
-and distinguish evidence of a permission flow from an unverified claim that
-every emulated HUD is rejected. The existing CarPlay bridge works with Google
-Maps/Apple Maps on the tested car; VML 3.4.3 does not supply the needed CarPlay
-metadata. The BLE prototype is separate from the 0.9.2 USB installer.
+Google Maps/Apple Maps worked through the CarPlay bridge on the tested car.
+The [iPhone probes](docs/iphone-probe-results.vi.md) found VietMap CarPlay
+sessions, maneuver updates and runtime maneuverType assignment through KVC
+when navigation starts **on the car screen**. Whether usable iAP2
+`0x8059/0x8058` data reaches the bridge on the car remains unverified.
+The BLE prototype is separate from the 0.9.3 USB installer.
 
-The [native CMU implementation](native/README.md) reuses the TPMS HCI mux for
-advertising, one peripheral connection, GATT and HUDInfo exchange. It builds
-with m3-toolchain/glibc 2.11: 70 host tests, 229 mux checks and 5 ARM/QEMU
-transport tests pass. A [dedicated USB trial kit](native/usb/README.md) adds
-query-first gating, a single native start, log collection and TPMS rollback.
-Real BLE validation and VBS output for this path remain outstanding.
+The [native CMU implementation](native/README.md) reuses the TPMS HCI mux
+for advertising, a peripheral connection and GATT/HUDInfo. Its guidance-to-VBS
+path is implemented and host-tested; native radio operation and HUD output
+on the car remain unverified. A [separate USB trial kit](native/usb/README.md)
+provides query-first gating, one native start, collection and TPMS rollback.
 
 For the ESP32-C3 Mini already available, use the [C3 firmware and capture
 guide](emu/esp32-hud-emu/README.vi.md). Both the default legacy-advertising
@@ -115,10 +117,11 @@ tests/
 
 The installer kit uses the same TouchTune USB mechanism as the other kits for this
 car (insert stick → tap INSTALL on the unit's update dialog → a Vietnamese menu).
-No keyboard needed at the car. The kit ships **both mods ready to install**:
-
-- **AA** — oem-aa-mod 0.10.0 release binaries (Android Auto → HUD, GAL 1.6)
-- **CARPLAY** — the mazda-carplay-hud bridge (ilshyma build: km/h fix + VN fold)
+No keyboard is needed. The builder supports AA and CarPlay when their payloads
+are available. **The locally built 0.9.3 DEBUG ZIP contains only the patched
+m3 CarPlay DEBUG payload, with AIO/CASDK diagnostics; it includes neither
+AA binaries nor TouchTune trigger files.** Overlay it onto an existing
+TouchTune USB stick. The ZIP is a local artifact, outside Git.
 
 Menu: `CAI DAT` → pick **AA / CARPLAY / CA HAI**, then confirm · `THU THAP` →
 diagnostics pack to the stick · `GO BO` → confirm, then removes what is
@@ -244,27 +247,34 @@ undoes another's.
 
 ## Status & roadmap
 
-- [x] Static analysis of VIETMAP LIVE (Android: `updateTrip(Trip)` confirmed;
-      iOS: `startNavigationSession` + `CPMapTemplate` confirmed)
-- [x] Street-name gap diagnosis + on-car adjudication procedure
-- [x] Road-budget patch + host test
-- [x] Touch install kit for VN firmware (74.00.331): AA mod + CarPlay bridge on
-      one TouchTune stick, with rollback and a diagnostics collect mode; the
-      shared launcher coexists with the TPMS and wireless-CarPlay kits
-- [x] Host checks: 120 checks against a fake CMU, including the install/rollback
-      round trip on the car's own sm configs and every dialog checked against
-      what the car's jci-dialog binary really shows
-- [ ] On-car session: AA, then CarPlay (THU THAP only if one fails) — confirm
-      on FW 74.00.331 and read the street-name behaviour with VIETMAP LIVE
-      (`road="--"` would close hypothesis H1; needs the debug build)
-- [ ] Build the patched AA binaries (road budget 64→256) with the m3 toolchain;
-      the kit currently ships upstream 0.10.0 binaries, the patch lives in
-      [patches/](patches/oem-aa-mod/) as source
-- [ ] Contribute the patch upstream to oem-aa-mod
+Updated 2026-10-25; kit version **0.9.3**.
+
+- [x] AA road-budget source patch (64→256) and host test.
+- [x] iPhone probes: CarPlay session/maneuver lifecycle, KVC maneuverType,
+      and 88 captured instruction strings; route must start on the car screen.
+- [x] CarPlay text fallback and m3 DEBUG build with `nav PICK` /
+      `nav TEXT-FALLBACK` logging; on-car VietMap output remains unverified.
+- [x] Local 0.9.3 DEBUG ZIP: payload MD5s, version, updated collector and
+      m3 DEBUG library verified. No AA payload or TouchTune trigger included.
+- [x] AIO/CASDK diagnostics and preservation of shared file bytes/modes
+      covered by the full fake-CMU installer suite on PC/WSL. Firmware ARM
+      BusyBox 1.19.2 syntax checks passed via QEMU. Real-sm-config testing is
+      optional (`VIETNAV_REAL_SM`) and was not repeated in this run.
+- [x] iOS accepted the ESP32-C3 BLE emulator and began streaming. Native CMU
+      guidance/VBS code has host tests; native radio and HUD output need the car.
+- [ ] **Next: test 0.9.3 DEBUG on FW 74.00.331.** Run Google Maps as a control,
+      then search/start VietMap **on the CarPlay screen**, drive through 2–3
+      turns, and always collect logs **before switching the unit off**.
+- [ ] Inspect `nav PICK`, fallback logs and iAP2 data; confirm arrow, distance,
+      street name and end-of-guidance separately. Then validate a daily build.
+- [ ] Validate coexistence on an AIO-equipped car; PC checks do not establish it.
+- [ ] Build/verify patched AA binaries with m3, test AA on the car, and submit
+      the road-budget patch upstream. These binaries are not in the 0.9.3 kit.
+- [ ] Continue native CMU radio/VBS trials separately from the CarPlay kit.
 
 ## Version
 
-`VERSION` holds the version (x.y.z), and each release is tagged `vx.y.z`. The
+`VERSION` holds the version (x.y.z), release tags use `vx.y.z` when published. The
 touch installer shows the stick's version in its title and the installed one
 in its status line (`DA CAI AA / installed 0.9.0`); every log on the stick
 names it too, and the install records it in `/data_persist/vietnav/version`
