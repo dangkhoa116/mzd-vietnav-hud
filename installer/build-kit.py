@@ -40,6 +40,8 @@ HOME = os.path.expanduser("~")
 
 LAUNCHER = os.path.join(HERE, "install-patches.sh")
 ROOT_FILES = {
+    "cmu-logs.sh": os.path.join(HERE, "cmu-logs.sh"),
+    "LOG-STEPS.txt": os.path.join(HERE, "LOG-STEPS.txt"),
     "vietnav-touch.sh": os.path.join(HERE, "vietnav-touch.sh"),
     "vietnav-install.sh": os.path.join(HERE, "vietnav-install.sh"),
     "vietnav-rollback.sh": os.path.join(HERE, "vietnav-rollback.sh"),

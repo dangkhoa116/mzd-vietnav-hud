@@ -240,6 +240,10 @@ class Car:
         os.chmod(os.path.join(self.t, rel), 0o755)
 
     def run(self, script, *args):
+        if script == "usb/install-patches.sh":
+            # v11 opens the shared CAI DAT / Log / HUY screen before the
+            # kit chooser. Existing sequences below describe the kit flow.
+            self.write("dialog.seq", b"0\n" + (self.read("dialog.seq") or b""))
         e = dict(os.environ)
         e["PATH"] = self.t + "/bin" + os.pathsep + e.get("PATH", "")
         p = subprocess.run(SH + [self.t + "/" + script] + list(args), capture_output=True,
@@ -664,8 +668,9 @@ def launcher_tests():
     kits(c, ["vietnav"])
     c.seq(0)
     c.run("usb/install-patches.sh")
-    check("launcher: one kit runs straight, no question",
-          "payload vietnav" in c.stublog() and "jci-dialog" not in c.stublog(), c.stublog())
+    check("launcher: one kit opens directly after the shared first screen",
+          "payload vietnav" in c.stublog() and "CAI DAT = mo VIETNAV" in c.stublog()
+          and c.stublog().count("--3-button-dialog") == 1, c.stublog())
 
     c = Car()
     kits(c, ["vietnav", "other"])
@@ -722,7 +727,7 @@ def launcher_tests():
         c.run("usb/install-patches.sh")
         # the whole call: its --text spans several log lines, up to the labels
         log = c.stublog()
-        i = log.find("--3-button-dialog")
+        i = log.rfind("--3-button-dialog")
         return log[i:log.find("--ok-label=", i)] if i >= 0 else ""
 
     c = Car()
@@ -749,7 +754,7 @@ def launcher_tests():
                                      % (c.t, c.t)).encode())
     c.seq(2, 0, 9)
     c.run("usb/install-patches.sh")
-    faces = [f.split("--ok-label=")[0] for f in c.stublog().split("--3-button-dialog")[1:]]
+    faces = [f.split("--ok-label=")[0] for f in c.stublog().split("--3-button-dialog")[2:]]
     check("launcher: after LAM TIEP the chooser shows the new state",
           len(faces) == 2 and "VIETNAV (HUD): CHUA CAI" in faces[0]
           and "VIETNAV (HUD): DA CAI AA / installed" in faces[1], c.stublog())
@@ -804,7 +809,7 @@ def launcher_tests():
     c.seq(*([1] * 40))
     rc, out = c.run("usb/install-patches.sh")
     check("launcher: chooser shown 6 times at most, then ends",
-          rc == 0 and c.stublog().count("--3-button-dialog") == 6, c.stublog())
+          rc == 0 and c.stublog().count("--3-button-dialog") == 7, c.stublog())
 
     c = Car()
     kits(c, ["tpms", "wcp", "vietnav", "other"])

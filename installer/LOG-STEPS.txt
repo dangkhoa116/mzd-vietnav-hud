@@ -1,0 +1,32 @@
+LAY LOG CMU / TPMS / SPEEDMAP
+============================
+1. Do xe, de dau Mazda hoat dong. Cam USB.
+2. Hop thoai cap nhat Mazda -> cai dat.
+3. Man hinh dau tien: CAI DAT / Log / HUY -> bam Log.
+4. Doi "Da luu log". Bam OK, rut USB va mang ve may.
+
+Thu muc cmu-logs-* gom:
+- CPU/RAM va tien trinh truoc/sau, kernel va bao cao reset cua Mazda.
+- Thong bao CPU/RAM/VIP va loi he thong tu nhat ky dang co.
+- TPMS: log giao dien, Bluetooth/daemon, RAM, lan chay truoc va cai dat.
+- SpeedMap: drive/hmi/boot/update, health.log va ban cu, trang thai.
+- Log cai dat/cham cua CarPlay va VIETNAV neu co.
+
+HUY chi thoat, khong thu log. Log khong cai dat hay khoi dong lai.
+Khong bat them ghi log nen; chi doc bang chung hien co. File thieu la
+binh thuong. Nhat ky cu co the thuoc lan khoi dong truoc.
+Van ban duoc an thong tin rieng tu va gioi han dung luong; manifest.txt
+ghi tep nguon va pham vi. Khong chep UART, core dump hay du lieu ban do.
+Neu bao "chua xong / Collection incomplete", mang USB ve de kiem tra
+cmu-logs-menu.log.
+
+ENGLISH
+=======
+Park with Mazda Connect running. Insert USB -> Mazda update: install -> Log.
+Wait for the completion message, tap OK, then remove the USB.
+cmu-logs-* contains CMU, TPMS and SpeedMap diagnostics plus available kit
+install/touch logs. HUY only exits. Log does not install or restart anything.
+Only existing evidence is read; no continuous logger is enabled. Files may
+be missing or belong to earlier boots. Text is privacy-filtered and bounded;
+see manifest.txt. No UART captures, raw core dumps or map databases copied.
+If collection fails, bring the USB home with cmu-logs-menu.log.
