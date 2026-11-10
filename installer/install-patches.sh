@@ -2,7 +2,7 @@
 # install-patches.sh - the shared touch launcher for this stick.
 # Copyright (c) 2026 Dang Khoa (dangkhoa116). MIT License.
 # SPDX-License-Identifier: MIT
-# mzd-touch-launcher: 11
+# mzd-touch-launcher: 12
 #
 # TouchTune's update trigger (github.com/Miatafy/TouchTune, GPL-3.0, by
 # Miatafy) runs a file of this name from the stick root, as root, when
@@ -15,7 +15,8 @@
 #                     renamed by the kit builders, otherwise untouched)
 #   vietnav-touch.sh  VIETNAV HUD
 #   utils-touch.sh    MZD Utils (v10)
-#   other-touch.sh    SpeedMap menu (legacy payload filename)
+#   other-touch.sh    another kit (Traffic Alert, Overlay HUD...); its name comes
+#                     from its "# mzd-touch-label: <name>" line (v12), else SpeedMap
 #   cmu-logs.sh       shared read-only diagnostic collector
 #
 # First screen: CAI DAT / Log / HUY. Log collects all available diagnostics
@@ -58,13 +59,19 @@ done
 
 have() { [ -f "$HERE/$1-touch.sh" ]; }
 
+# the "other" kit names itself (v12): letters, digits and spaces, at most 20
+other_label() {
+    L=`sed -n 's/^# mzd-touch-label: \([A-Za-z0-9 ]\{1,20\}\)$/\1/p' "$HERE/other-touch.sh" 2>/dev/null | head -n 1`
+    echo "${L:-SpeedMap}"
+}
+
 label() {
     case "$1" in
         tpms)    echo "TPMS" ;;
         wcp)     echo "CARPLAY" ;;
         vietnav) echo "VIETNAV" ;;
         utils)   echo "UTILS" ;;
-        *)       echo "SpeedMap" ;;
+        *)       other_label ;;
     esac
 }
 
@@ -113,7 +120,7 @@ desc() {
         wcp)     echo "CARPLAY (khong day): `state wcp`" ;;
         vietnav) echo "VIETNAV (HUD): `state vietnav`" ;;
         utils)   echo "UTILS (tat FM): `state utils`" ;;
-        *)       echo "SpeedMap (canh bao giao thong / traffic alerts)" ;;
+        *)       other_label ;;
     esac
 }
 
@@ -144,7 +151,7 @@ legend() {
     while [ "$i" -le "$N" ]; do
         eval "k=\$K$i"
         [ "$k" = utils ] && TEXT="$TEXT`desc utils`\\n"
-        [ "$k" = other ] && TEXT="${TEXT}SpeedMap (canh bao giao thong / traffic alerts)\\n"
+        [ "$k" = other ] && TEXT="${TEXT}`other_label`\\n"
         i=$((i + 1))
     done
 }
@@ -181,7 +188,7 @@ else
     FIRST="CAI DAT = chon bo cai / choose a kit."
     FTITLE=""
 fi
-ask3 "$FIRST\\nLog = lay log / collect logs.\\nCMU + TPMS + SpeedMap.\\nHUY = thoat / cancel." "CAI DAT" "Log" "HUY" "$FTITLE"
+ask3 "$FIRST\\nLog = lay log / collect logs.\\nCMU + TPMS + Traffic Alert.\\nHUY = thoat / cancel." "CAI DAT" "Log" "HUY" "$FTITLE"
 case "$?" in
     0) ;;
     1)
@@ -194,10 +201,10 @@ case "$?" in
         mount -o rw,remount "$HERE" 2>/dev/null || true
         killall -q jci-dialog 2>/dev/null || true
         "$DIALOG" --info --title="USB: Log" \
-            --text="Dang lay log... / Collecting logs...\\nCMU + TPMS + SpeedMap.\\nDung rut USB / Do not remove USB.\\nDoi bao xong / Wait for completion." --no-cancel > /dev/null 2>&1 &
+            --text="Dang lay log... / Collecting logs...\\nCMU + TPMS + Traffic Alert.\\nDung rut USB / Do not remove USB.\\nDoi bao xong / Wait for completion." --no-cancel > /dev/null 2>&1 &
         if sh "$HERE/cmu-logs.sh" "$HERE" >> "$HERE/cmu-logs-menu.log" 2>&1; then
             sync
-            say "Da luu log / Logs saved.\\nCMU + TPMS + SpeedMap.\\nThu muc / Folder: cmu-logs-*\\nBam OK, rut USB / Tap OK, remove USB.\\nMang ve may / Bring USB to your PC."
+            say "Da luu log / Logs saved.\\nCMU + TPMS + Traffic Alert.\\nThu muc / Folder: cmu-logs-*\\nBam OK, rut USB / Tap OK, remove USB.\\nMang ve may / Bring USB to your PC."
             exit 0
         fi
         sync

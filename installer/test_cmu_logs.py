@@ -168,7 +168,7 @@ exit 0
         assert "TAIL-END" in (out / "tpms/live-boot.log").read_text()
         assert (out / "tpms/live-boot.log").stat().st_size <= 524288
         assert "skip oversized archive" in (out / "manifest.txt").read_text()
-        print("PASS: BusyBox Log collects CMU + TPMS + SpeedMap, native archives and prior RAM logs")
+        print("PASS: BusyBox Log collects CMU + TPMS + Traffic Alert, native archives and prior RAM logs")
         print("PASS: bounds, missing/corrupt archives, symlinks, privacy; no car file changes")
 
         r = run("1\n")
