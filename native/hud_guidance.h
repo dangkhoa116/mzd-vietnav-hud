@@ -37,7 +37,7 @@ struct vn_nav {
 
 struct vn_guidance {
     uint32_t icon;        /* Mazda HUD code; VN_ICON_CLEAR = wipe */
-    uint32_t distance;    /* u16 value after the unit choice */
+    uint32_t distance;    /* u16 tenths of the chosen unit (150 m -> 1500) */
     uint32_t unit;        /* 1 = meters, 3 = km, 0 on clear */
     uint32_t speed_limit; /* km/h; 0 hides the roundel */
     uint32_t sync;        /* rotates 1..7 on every emit */
@@ -58,8 +58,8 @@ struct vn_guide_state {
  */
 int vn_nav_decode(struct vn_nav *out, const unsigned char *buf, unsigned n);
 
-/* (value, unit) pair for a distance in meters; km uses one decimal like the
- * app (hectometer u16), rounding half-to-even to match the Python bridge. */
+/* OEM distanceValue uses tenths of the chosen unit: meters*10 below 1 km,
+ * meters/100 above it (truncated, like the existing AA/CarPlay transport). */
 uint32_t vn_map_distance(uint32_t distance_m, uint32_t *unit);
 
 /* Normalize Vietnamese UTF-8 for the HUD ECU font: the cluster only renders

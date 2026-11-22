@@ -61,11 +61,11 @@ class IconMapTests(unittest.TestCase):
 
 class DistanceTests(unittest.TestCase):
     def test_meters_under_1km(self):
-        self.assertEqual(vbs.map_distance(150), (150, vbs.HUD_UNIT_METERS))
+        self.assertEqual(vbs.map_distance(150), (1500, vbs.HUD_UNIT_METERS))
 
     def test_km_over_1km(self):
-        # 8253 m -> 83 (x100 m) hien "8.3 km" nhu man hinh app.
-        self.assertEqual(vbs.map_distance(8253), (83, vbs.HUD_UNIT_KM))
+        # OEM uses tenths of km, truncated like the existing transport.
+        self.assertEqual(vbs.map_distance(8253), (82, vbs.HUD_UNIT_KM))
 
     def test_clamp_u16(self):
         # 200 km -> 2000 (x 100 m); khong bao gio tran u16 voi khoang cach
@@ -78,7 +78,7 @@ class GuidanceBuilderTests(unittest.TestCase):
     def test_first_guidance_with_arrow(self):
         b = vbs.GuidanceBuilder()
         g = b.feed(nav(), FakeArrow("end_of_road", "right"))
-        self.assertEqual((g.icon, g.distance, g.unit, g.road), (vbs.HUD_RIGHT, 150, 1, "Quốc Lộ 13"))
+        self.assertEqual((g.icon, g.distance, g.unit, g.road), (vbs.HUD_RIGHT, 1500, 1, "Quốc Lộ 13"))
         self.assertEqual(g.sync, 1)
         self.assertFalse(g.clear)
 
@@ -87,7 +87,7 @@ class GuidanceBuilderTests(unittest.TestCase):
         g1 = b.feed(nav(), FakeArrow("end_of_road", "right"))
         self.assertIsNone(b.feed(nav(), FakeArrow("end_of_road", "right")))
         g2 = b.feed(nav(distance_m=100), FakeArrow("end_of_road", "right"))
-        self.assertEqual(g2.distance, 100)
+        self.assertEqual(g2.distance, 1000)
         self.assertEqual(g2.sync, g1.sync + 1)
 
     def test_distance_shrinks_without_new_arrow(self):
@@ -96,7 +96,7 @@ class GuidanceBuilderTests(unittest.TestCase):
         g1 = b.feed(nav(), FakeArrow("turn", "left"))
         g2 = b.feed(nav(distance_m=80), None)
         self.assertEqual(g2.icon, vbs.HUD_LEFT)
-        self.assertEqual(g2.distance, 80)
+        self.assertEqual(g2.distance, 800)
 
     def test_idle_frame_emits_clear_once(self):
         b = vbs.GuidanceBuilder()
@@ -117,7 +117,7 @@ class GuidanceBuilderTests(unittest.TestCase):
         b.feed(nav(distance_m=0xFFFFFFFF, next_road=""))
         g = b.feed(nav(distance_m=300), FakeArrow("turn", "right"))
         self.assertEqual(g.icon, vbs.HUD_RIGHT)
-        self.assertEqual(g.distance, 300)
+        self.assertEqual(g.distance, 3000)
 
 
 class RealCaptureTests(unittest.TestCase):

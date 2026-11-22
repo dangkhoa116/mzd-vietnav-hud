@@ -67,6 +67,13 @@ jobs:
         run: make -C tests test-carplay
       - name: Codec sanitizer tests
         run: python3 tests/test_esp32_hud.py -v
+      - name: Native ATT and guidance sanitizer tests
+        run: |
+          mkdir -p out/native-sanitizers
+          gcc -std=c99 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined \
+            -fno-sanitize-recover=all -I native tests/native_fuzz.c \
+            native/hud_native.c native/hud_guidance.c -o out/native-sanitizers/fuzz
+          out/native-sanitizers/fuzz
 
   installer-busybox:
     runs-on: ubuntu-latest

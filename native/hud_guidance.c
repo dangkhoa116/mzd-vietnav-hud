@@ -12,21 +12,35 @@ static uint32_t be32_(const unsigned char *p)
 
 /* Copy a NUL-scanned or length-prefixed road field, never splitting a UTF-8
  * sequence and always NUL-terminating. Returns the bytes written. */
-static unsigned road_copy(char *dst, const unsigned char *src, unsigned cap,
-                          unsigned nul_scanned)
+static unsigned road_copy(char *dst, const unsigned char *src, unsigned cap)
 {
-    unsigned i = 0;
-    if (nul_scanned) {
-        while (i < cap && i < VN_ROAD_MAX - 1 && src[i])
-            i++;
-    } else {
-        while (i < cap && i < VN_ROAD_MAX - 1)
-            i++;
+    unsigned i = 0, width, j, valid;
+    if (cap > VN_ROAD_MAX - 1)
+        cap = VN_ROAD_MAX - 1;
+    while (i < cap && src[i]) {
+        unsigned char lead = src[i];
+        width = lead < 0x80 ? 1 : (lead >= 0xc2 && lead <= 0xdf ? 2 :
+                (lead >= 0xe0 && lead <= 0xef ? 3 :
+                 (lead >= 0xf0 && lead <= 0xf4 ? 4 : 0)));
+        if (width && width > cap - i)
+            break; /* The fixed road field cut through a codepoint. */
+        valid = width != 0;
+        for (j = 1; j < width; j++)
+            if ((src[i + j] & 0xc0) != 0x80)
+                valid = 0;
+        if (width >= 3 && ((lead == 0xe0 && src[i + 1] < 0xa0) ||
+                          (lead == 0xed && src[i + 1] >= 0xa0) ||
+                          (lead == 0xf0 && src[i + 1] < 0x90) ||
+                          (lead == 0xf4 && src[i + 1] >= 0x90)))
+            valid = 0;
+        if (!valid) {
+            dst[i++] = '?';
+            continue;
+        }
+        for (j = 0; j < width; j++)
+            dst[i + j] = (char)src[i + j];
+        i += width;
     }
-    while (i > 0 && ((unsigned char)src[i - 1] & 0xc0) == 0x80)
-        i--;
-    for (cap = 0; cap < i; cap++)
-        dst[cap] = (char)src[cap];
     dst[i] = 0;
     return i;
 }
@@ -41,8 +55,8 @@ static unsigned decode_fixed(struct vn_nav *out, const unsigned char *p, unsigne
         return 0;
     out->direction = p[0];
     out->distance_m = be32_(p + 1);
-    road_copy(out->next_road, p + 5, VN_ROAD_FIELD_MAX, 1);
-    road_copy(out->current_road, p + 0x55, VN_ROAD_FIELD_MAX, 1);
+    road_copy(out->next_road, p + 5, VN_ROAD_FIELD_MAX);
+    road_copy(out->current_road, p + 0x55, VN_ROAD_FIELD_MAX);
     hours = be16_(p + 0xa5);
     out->remain_time_s = hours * 3600u + (unsigned)p[0xa7] * 60u + p[0xa8];
     out->remain_dist_m = be32_(p + 0xa9);
@@ -74,13 +88,13 @@ static unsigned decode_var1(struct vn_nav *out, const unsigned char *p, unsigned
     o = 6;
     if (o + ln_next >= n)
         return 0;
-    road_copy(out->next_road, p + o, ln_next, 0);
+    road_copy(out->next_road, p + o, ln_next);
     o += ln_next;
     ln_cur = p[o];
     o++;
     if (o + ln_cur + 10 > n)
         return 0;
-    road_copy(out->current_road, p + o, ln_cur, 0);
+    road_copy(out->current_road, p + o, ln_cur);
     o += ln_cur;
     o = decode_tail(out, p, o, n);
     if (!o)
@@ -117,13 +131,13 @@ static unsigned decode_var2(struct vn_nav *out, const unsigned char *p, unsigned
     o++;
     if (o + ln_next >= n)
         return 0;
-    road_copy(out->next_road, p + o, ln_next, 0);
+    road_copy(out->next_road, p + o, ln_next);
     o += ln_next;
     ln_cur = p[o];
     o++;
     if (o + ln_cur + 10 > n)
         return 0;
-    road_copy(out->current_road, p + o, ln_cur, 0);
+    road_copy(out->current_road, p + o, ln_cur);
     o += ln_cur;
     o = decode_tail(out, p, o, n);
     if (!o)
@@ -172,15 +186,11 @@ uint32_t vn_map_distance(uint32_t distance_m, uint32_t *unit)
 {
     uint32_t value;
     if (distance_m >= VN_KM_THRESHOLD_M) {
-        /* One decimal km like the app shows: hectometers, rounded to even
-         * at the half to match bridge/vmlhud_vbs.py round(). */
+        /* OEM distanceValue is unit*10, not a display-rounded distance. */
         value = distance_m / 100u;
-        distance_m %= 100u;
-        if (distance_m > 50u || (distance_m == 50u && (value & 1u)))
-            value++;
         *unit = VN_UNIT_KM;
     } else {
-        value = distance_m;
+        value = distance_m * 10u;
         *unit = VN_UNIT_METERS;
     }
     if (value > 0xffffu)

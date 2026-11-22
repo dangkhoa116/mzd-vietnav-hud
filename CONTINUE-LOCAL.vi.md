@@ -4,6 +4,51 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## Tiếp tục từ `907aebf`: sửa lỗi tích hợp native trước bài thử trên xe
+
+Đã đối chiếu **53 commit** sau bản bàn giao `e789b10`. Giữ các kết quả mới:
+app iOS đã nhận C3 và gửi nav/ảnh thật, Android đã quan sát chọn discovery
+Classic trên máy thử, guidance/VBS native đã có code; không làm lại bài thử
+C3 từ đầu. Checkout TPMS trong môi trường này đã là **0.9.20**, được giữ nguyên.
+
+Bản sửa trong đợt tiếp tục này:
+
+1. `native/hud_guidance.c`: sửa việc cắt mất continuation byte của **ký tự
+   UTF-8 hoàn chỉnh ở cuối tên đường**. Các tên `Nguyễn Huệ`, `Café`, ký tự
+   2/3/4 byte đều được kiểm; field fixed chỉ bỏ codepoint chưa đủ khi bị cắt.
+2. `VN_FRAME_MAX`: **2048 → 4096 byte**. Capture đã ghi nhận ảnh JPEG 2438
+   byte, nên giới hạn cũ loại chính khung có mũi tên. Kiểm khung chia ATT
+   20 byte, nhận đúng giới hạn, loại 4097 byte và phục hồi cho khung sau.
+3. `vn_map_distance` và `bridge/vmlhud_vbs.py`: đồng nhất hợp đồng OEM với
+   `vmlhud_hud_out.distance_fields`/AA transport: **150 m → distanceValue
+   1500, unit 1**; 8253 m → 82, unit 3. Giá trị km được cắt phần thập phân
+   tiếp theo, không lấy số đã làm tròn trên UI app.
+4. `native/run_tests.sh`: link đủ file guidance/VBS mới cho test mux và fuzz;
+   cập nhật initializer `vn_io`. Test transport dùng `VIETNAV_TPMS_SOURCE`
+   giống bước prepare, nên có thể kiểm với TPMS đã pin riêng mà không sửa
+   checkout 0.9.20. CI thêm fuzz native không cần repo TPMS private.
+
+Đã tái hiện lỗi trước sửa bằng test thất bại, sau sửa đã qua:
+
+- **94 unittest native/HUD**, gồm 24 test guidance; **1 skip** packaging vì
+  môi trường này chưa có artifact ARM tương ứng, không tính skip là đã kiểm.
+- **229** kiểm tra mux; ASan/UBSan **50.000 ATT + 50.000 nav payload**.
+- 39 unittest bridge/arrow/HUD output và 8 test codec C3 sanitizer.
+- Bộ installer và collector trên fixture; 51 kiểm tra C++ CarPlay text.
+- Script VBS: 13 test, 1 skip do thiếu capture cũ. Không dùng các skip để
+  khẳng định kết quả radio, ARM hoặc trên xe.
+
+Cách chạy native với worktree TPMS đã duyệt nằm trong `native/README.md`.
+Log phiên này ở `out/review-907aebf/` (ignored). Các artifact ZIP/ARM cũ không
+chứa bản sửa mới; phải rebuild trước khi dùng để đánh giá bản sửa trên xe.
+
+**Vẫn cần làm:** native chưa có classifier JPEG nhúng, icon hiện giữ giá trị
+cũ/mặc định thẳng; nhận được frame lớn không đồng nghĩa đã chọn đúng hướng
+rẽ. Chưa thử radio/bds/VBS trên xe trong phiên này. Mốc tiếp theo vẫn là
+query controller + thử native có log/rollback, hoặc bài CarPlay DEBUG bắt
+đầu tuyến từ màn hình xe như hướng dẫn mới nhất bên dưới. Không coi việc
+bổ sung test host là đã hoàn tất dẫn đường lên HUD thật.
+
 ## Cập nhật 25-10 (~05:00): KIT 0.9.2 SẴN SÀNG — HUD như Google Maps chờ 1 buổi trên xe
 
 Đóng góp mới nhất từ probe: ngoài `setManeuverType:` qua KVC, còn phát hiện

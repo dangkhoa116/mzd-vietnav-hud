@@ -27,7 +27,10 @@ thu log, huỷ lịch và gỡ; chỉ chạy HUD ở một lần khởi động 
   (docs/hud-dart-layer-analysis.vi.md). Chưa xác nhận UID runtime.
 - Ghi BLE write của chính HUD thành `VML RX`. Tool Python đọc lại thành
   navigation/camera/heartbeat, kể cả legacy. Assembler bắt tay C chỉ xử lý
-  khung mới, giới hạn 2048 byte; chưa xử lý ảnh/OTA lớn.
+  khung mới, giới hạn **4096 byte** (cùng giới hạn bản C3). Khung có JPEG
+  2438 byte đã ghi nhận trong capture vượt giới hạn 2048 cũ. Khung đúng
+  4096 byte được nhận; quá giới hạn bị loại và vẫn nhận được khung kế tiếp.
+  Đây là kiểm transport bằng fixture, không phải nhận dạng nội dung JPEG.
 - **Đường VBS đã nối (host, chưa lên xe)**: khung nav CMD 0x00/0x40 được giải
   mã ngay trong core C (`hud_guidance.c`, parity từng field với
   `bridge/vmlhud_nav.py` + `vmlhud_vbs.py`, test 19 case), gộp thành guidance
@@ -39,6 +42,11 @@ thu log, huỷ lịch và gỡ; chỉ chạy HUD ở một lần khởi động 
   hoá 3 byte → 2 byte cho font HUD (port từ hud_send.cpp của
   mazda-carplay-hud). Icon: giữ icon cũ, mặc định thẳng — nhận dạng mũi tên
   JPEG cần bộ fingerprint offline, vẫn nằm phía Python.
+- Tên đường được sao chép theo codepoint UTF-8: giữ đủ ký tự có dấu cuối
+  tên như `Nguyễn Huệ`; chỉ bỏ chuỗi byte chưa đủ ở ranh giới field fixed.
+  Khoảng cách theo hợp đồng OEM `distanceValue = đơn vị * 10`: 150 m →
+  1500 với unit 1, 8253 m → 82 với unit 3. Không lấy số mét thô hoặc làm
+  tròn số hiển thị app để ghi thẳng vào struct VBS.
 - Một ACL packet đang chờ completion tại một thời điểm. Completion của handle
   khác không cấp credit cho HUD; mux giữ traffic/credit của `bds`.
 
@@ -84,6 +92,27 @@ python3 -m venv .venv-hud
 .venv-hud/bin/pip install -r hud_emulator/requirements.txt
 PYTHON=.venv-hud/bin/python sh native/run_tests.sh
 ```
+
+Nếu checkout TPMS đã mới hơn revision được review (ví dụ 0.9.20), không sửa
+hash gate hoặc hạ phiên bản checkout đó. Tạo worktree riêng của bản đã duyệt:
+
+```sh
+git -C ../mzd-connect-tpms worktree add --detach ../tpms-hud-reviewed dbb870daba6f68907932f6fe57d59e0143500ac1
+VIETNAV_TPMS_SOURCE="$(pwd)/../tpms-hud-reviewed" \
+  PYTHON=.venv-hud/bin/python sh native/run_tests.sh
+```
+
+`VIETNAV_TPMS_SOURCE` là thư mục gốc repo TPMS; cả bước prepare và test
+transport dùng cùng nguồn đó. Script link đầy đủ guidance/VBS cho host/mux
+và guidance cho fuzz host/ARM. CI chạy thêm fuzz ATT + payload guidance mà
+không cần clone repo TPMS private.
+
+Lần kiểm sau `907aebf`: **94 unittest host, 1 skip** (packaging cần artifact
+ARM chưa có trong môi trường này); **229 mux checks** pass; ASan/UBSan qua
+**50.000 input ATT + 50.000 payload nav**. Module guidance có 24 test gồm
+UTF-8 cuối tên, ảnh 2438 byte, giới hạn 4096/4097 byte, phục hồi sau frame lỗi
+và parity khoảng cách với đường HUD hiện có. Xem log trong
+`out/review-907aebf/` của phiên cloud; thư mục này không đi theo Git.
 
 Đã kiểm chứng:
 

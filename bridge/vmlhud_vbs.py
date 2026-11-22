@@ -108,7 +108,7 @@ def icon_for(maneuver, modifier):
 class Guidance:
     """Mot lan can day len com.jci.vbs.navi; ``None`` = khong gi thay doi."""
     icon: int = 0            # nextManeuverInfo; 0 = xoa guidance
-    distance: int = 0        # u16 sau khi chon don vi
+    distance: int = 0        # u16, don vi * 10 (150 m -> 1500)
     unit: int = 0            # 1=met, 3=km
     road: str = ""           # guidancePointName (Msg2), UTF-8
     speed_limit: int = 0     # km/h; 0 = khong hien
@@ -117,11 +117,14 @@ class Guidance:
 
 
 def map_distance(distance_m):
-    """(gia tri u16, ma don vi) cho khoang cach met."""
+    """OEM (distanceValue, unit): tenths of meters/km, matching hud_out.
+
+    Same contract as AA hud_tx_distance and CarPlay distance_dec: 150 m is
+    1500 with unit METERS; 8253 m is 82 with unit KM (one decimal, truncated).
+    """
     if distance_m >= KM_THRESHOLD_M:
-        # km mot chu so thap phan (83 -> "8.3 km"), kieu app hien thi.
-        return min(round(distance_m / 100.0), 0xFFFF), HUD_UNIT_KM
-    return min(distance_m, 0xFFFF), HUD_UNIT_METERS
+        return min(distance_m // 100, 0xFFFF), HUD_UNIT_KM
+    return min(distance_m * 10, 0xFFFF), HUD_UNIT_METERS
 
 
 def is_idle(nav):

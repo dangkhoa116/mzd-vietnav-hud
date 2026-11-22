@@ -16,10 +16,11 @@ static int send_packet(void *u, const unsigned char *p, unsigned n) {
 }
 int main(void) {
   static struct vn_hud v;
-  struct vn_io io = {0, send_packet, 0};
+  struct vn_io io = {0, send_packet, 0, 0};
   struct vn_caps cap;
   unsigned i, j, n;
-  unsigned char bytes[40], sum[4], uid[16] = {0};
+  unsigned char bytes[40], nav_bytes[1024], sum[4], uid[16] = {0};
+  struct vn_nav nav;
   static const unsigned char raw[] = {0xa5, 0x5a, 0x37, 0xc3, 0, 0,  0,
                                       14,   0,    0,    0,    0, 14, 0};
   static const unsigned char expect[] = {0x4d, 0xc6, 0x42, 0x15};
@@ -52,7 +53,23 @@ int main(void) {
     vn_completed(&v, 0x41, 1);
     vn_disconnected(&v, 0x41);
     assert(v.handle == -1);
+    /* Exercise the guidance decoder directly too: random ATT writes almost
+     * never form a checksummed frame, so they cannot cover UTF-8/road bounds. */
+    n = i % 4 == 0 ? VN_NAV_FIXED_LEN + 1 : rnd() % sizeof nav_bytes;
+    for (j = 0; j < n; j++)
+      nav_bytes[j] = (unsigned char)(rnd() >> 24);
+    nav_bytes[0] = i & 1 ? 0x40 : 0;
+    if (n > 6 && i % 3 == 0) {
+      nav_bytes[2] = nav_bytes[3] = nav_bytes[4] = 0;
+      nav_bytes[5] = 1;
+      nav_bytes[6] = 1;
+    }
+    if (vn_nav_decode(&nav, nav_bytes, n)) {
+      /* Both outputs remain bounded C strings even for invalid input text. */
+      assert(memchr(nav.next_road, 0, sizeof nav.next_road));
+      assert(memchr(nav.current_road, 0, sizeof nav.current_road));
+    }
   }
-  puts("native checksum + 50000 malformed ATT inputs: PASS");
+  puts("native checksum + 50000 malformed ATT inputs + 50000 nav payloads: PASS");
   return 0;
 }

@@ -5,7 +5,8 @@
 #include "hud_guidance.h"
 
 #define VN_MTU 23
-#define VN_FRAME_MAX 2048
+/* Observed custom-arrow JPEGs alone reach 2438 bytes. Match the C3 bound. */
+#define VN_FRAME_MAX 4096
 #define VN_QUEUE 16
 /* Name proven against VIETMAP LIVE 3.4.3 on iOS: must contain "HUD".
  * Must stay 11 bytes - the advertisement and GAP-name reads copy exactly 11. */

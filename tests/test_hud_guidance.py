@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / 'bridge'))
 from hud_emulator.protocol import DEFAULT_UID, encode
 import vmlhud_nav as py_nav
 import vmlhud_vbs as py_vbs
+import vmlhud_hud_out as py_hud_out
 
 
 class GuidanceStruct(C.Structure):
@@ -137,6 +138,27 @@ class GuidanceTests(unittest.TestCase):
             self._assert_decode_parity(0x00, py_nav.build_nav_fixed(nav))
             self._assert_decode_parity(0x00, py_nav.build_nav_variable(nav))
 
+    def test_decode_preserves_complete_utf8_at_end_of_road(self):
+        for name in ('Nguyễn Huệ', 'Đường Lê Lợi', 'Đường số Đ', 'Café', 'A😀'):
+            nav = py_nav.NavInfo(direction=0xfe, distance_m=150,
+                                 next_road=name, current_road=name)
+            for cmd, builder in ((0, py_nav.build_nav_fixed),
+                                 (0, py_nav.build_nav_variable),
+                                 (0x40, py_nav.build_nav_variable2)):
+                with self.subTest(name=name, builder=builder.__name__):
+                    self._assert_decode_parity(cmd, builder(nav))
+
+    def test_fixed_road_discards_only_incomplete_utf8_at_field_boundary(self):
+        for width, letter in ((2, 'é'), (3, 'ệ'), (4, '😀')):
+            for available in range(1, width + 1):
+                raw = b'A' * (80 - available) + letter.encode()[:available]
+                payload = bytes([0xfe]) + struct.pack('>I', 150) + raw + b'B' * 80 + bytes(10)
+                self.assertEqual(self.lib.gd_decode(b'\0' + payload, len(payload) + 1), 1)
+                out = C.create_string_buffer(300)
+                self.lib.gd_road(0, out, len(out))
+                expected = 'A' * (80 - available) + (letter if available == width else '')
+                self.assertEqual(out.value.decode('utf-8'), expected)
+
     def test_decode_rejects_garbage(self):
         self.assertEqual(self.lib.gd_decode(b'\x00\x01', 2), 0)
         self.assertEqual(self.lib.gd_decode(b'\x0e\x00' + b'\x00' * 4, 6), 0)
@@ -196,14 +218,15 @@ class GuidanceTests(unittest.TestCase):
         emitted, got = self._c_feed(100, 'Trần Hưng Đạo', icon_hint=0)
         self.assertTrue(emitted)
         self.assertEqual(got.icon, 3)
-        self.assertEqual(got.distance, 100)
+        self.assertEqual(got.distance, 1000)
 
-    def test_map_distance_rounds_half_to_even_like_python(self):
+    def test_map_distance_matches_the_existing_hud_transport(self):
         self.lib.vn_map_distance.argtypes = [C.c_uint32, C.POINTER(C.c_uint32)]
         self.lib.vn_map_distance.restype = C.c_uint32
         unit = C.c_uint32()
-        for meters in (0, 999, 1000, 1004, 1049, 1050, 1150, 1250, 8300, 9999, 100000):
-            want_value, want_unit = py_vbs.map_distance(meters)
+        for meters in (0, 150, 999, 1000, 1004, 1049, 1050, 1150, 1250, 8253,
+                       8300, 9999, 100000, 0xffffffff):
+            want_value, want_unit = py_hud_out.distance_fields(meters)
             self.assertEqual(self.lib.vn_map_distance(meters, C.byref(unit)), want_value,
                              meters)
             self.assertEqual(unit.value, want_unit, meters)
@@ -398,7 +421,7 @@ class WireGuidanceTests(unittest.TestCase):
         self.assertEqual(self.lib.test_guide_count(), 1)
         got = self.lib.test_guide_at(0).contents
         self.assertEqual(got.icon, 1)
-        self.assertEqual(got.distance, 150)
+        self.assertEqual(got.distance, 1500)
         self.assertEqual(got.unit, 1)
         self.assertEqual(got.road.decode(), 'Nguyen Van Linh')
         self.assertEqual(got.sync, 1)
@@ -425,6 +448,41 @@ class WireGuidanceTests(unittest.TestCase):
         frame[-1] ^= 0xff
         self._write_handle(14, bytes(frame))
         self.assertEqual(self.lib.test_guide_count(), 0)
+
+    def test_captured_arrow_image_size_reaches_guidance_over_fragmented_att(self):
+        # Synthetic JPEG bytes, with the 2,438-byte image size documented in
+        # docs/vmlhud-nav-payloads.md; the native decoder skips image content.
+        nav = py_nav.NavInfo(direction=0xfe, distance_m=150, next_road='Nguyễn Huệ')
+        payload = py_nav.build_nav_variable2(nav)
+        image = b'\xff\xd8' + b'J' * 2434 + b'\xff\xd9'
+        frame = encode(0x40, payload[:1] + struct.pack('>I', len(image)) + image + payload[6:])
+        self.assertGreater(len(frame), 2048)
+        self._write_handle(14, frame)
+        self.assertEqual(self.lib.test_guide_count(), 1)
+        got = self.lib.test_guide_at(0).contents
+        self.assertEqual(got.road.decode(), 'Nguyên Huê')
+        # OEM distanceValue carries tenths: 150 m is 1500 with unit METERS.
+        self.assertEqual((got.distance, got.unit), (1500, 1))
+
+    def _image_frame_of_size(self, size):
+        nav = py_nav.NavInfo(direction=0xfe, distance_m=90, next_road='Road')
+        payload = py_nav.build_nav_variable2(nav)
+        length = size - len(encode(0x40, payload)) + 1
+        return encode(0x40, payload[:1] + struct.pack('>I', length) + b'J' * length + payload[6:])
+
+    def test_frame_at_4096_byte_limit_is_accepted(self):
+        frame = self._image_frame_of_size(4096)
+        self.assertEqual(len(frame), 4096)
+        self._write_handle(14, frame)
+        self.assertEqual(self.lib.test_guide_count(), 1)
+
+    def test_oversize_frame_is_rejected_and_next_frame_still_guides(self):
+        frame = self._image_frame_of_size(4097)
+        self.assertEqual(len(frame), 4097)
+        self._write_handle(14, frame)
+        self.assertEqual(self.lib.test_guide_count(), 0)
+        self._write_handle(14, self._nav_frame(0x40, 90, 'Road'))
+        self.assertEqual(self.lib.test_guide_count(), 1)
 
 
 if __name__ == '__main__':

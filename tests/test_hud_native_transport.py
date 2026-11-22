@@ -21,7 +21,7 @@ from hud_emulator.protocol import decode, encode
 spec = importlib.util.spec_from_file_location('vn_prepare', ROOT / 'native/prepare.py')
 prepare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare)
-TPMS = ROOT.parent / 'mzd-connect-tpms/tpms/v3/v3.c'
+TPMS = Path(os.environ.get('VIETNAV_TPMS_SOURCE', ROOT.parent / 'mzd-connect-tpms')) / 'tpms/v3/v3.c'
 capture_spec = importlib.util.spec_from_file_location('vn_capture', ROOT / 'native/decode_capture.py')
 capture = importlib.util.module_from_spec(capture_spec)
 capture_spec.loader.exec_module(capture)
