@@ -76,6 +76,9 @@ int main(int argc,char **argv)
         vn_command_reply(&hud,op,0,now);
     }
     vn_connected(&hud,0,0x41,1,now);
+    /* Offline input may span hours. The physical one-start trial's 180 s
+     * cap must not silently discard the remainder of a long replay. */
+    hud.expires = ~(uint64_t)0;
     puts("{\"type\":\"replay\",\"radio\":false,\"oemBus\":\"fake\"}");
     for (;;) {
         n=(unsigned)fread(frame,1,8,input);

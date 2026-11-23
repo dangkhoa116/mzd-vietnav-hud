@@ -49,5 +49,19 @@ class ReplayTests(unittest.TestCase):
             self.assertTrue(rows[2]['clear'])
             self.assertTrue(all(x['wire']['sync']==x['wire']['streetSync'] for x in rows))
 
+    def test_replay_continues_past_the_physical_trial_time_limit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder=Path(folder);lib=native_library(folder)
+            model=folder/'arrows.vna';model.write_bytes(synthetic_model(lib,folder))
+            frames=folder/'long.bin'
+            frames.write_bytes(b''.join(hud_emu.navigation(100+i) for i in range(1801)))
+            out=folder/'out'
+            subprocess.run([sys.executable,str(ROOT/'native/hud_emu.py'),'--model',str(model),
+                            '--frames',str(frames),'--out',str(out)],check=True,
+                           capture_output=True,text=True,timeout=30)
+            rows=[json.loads(x) for x in (out/'hud-events.jsonl').read_text().splitlines()]
+            last=[row for row in rows if not row['clear']][-1]
+            self.assertEqual((last['wire']['distanceValue'],last['unit']),(19,3))
+
 
 if __name__=='__main__': unittest.main()
