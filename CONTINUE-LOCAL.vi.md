@@ -26,29 +26,27 @@ Kết quả phiên này:
   firmware gốc qua. `.so` thêm các API chuẩn được kiểm export, chỉ yêu cầu
   GLIBC_2.4. Rootfs gốc đã khôi phục lại trong môi trường cloud hiện tại.
 
-Artifact cloud: `out/vietnav-esp32c3-hud-8k.zip`,
-`out/vietnav-native-hud-r3-usb.zip`, `out/vietnav-hud-emu-complete.zip`.
-Chúng là file ignored, không đi theo Git. USB native vẫn query-first, chỉ
-hỗ trợ wrapper TPMS 0.9.3 đã review; checkout TPMS 0.9.20 giữ nguyên. Chưa
-xác nhận native radio/VBS trên xe, không coi bản ARM hay replay là bài xe.
+Artifact của luồng Vietnav nằm trong `out/vietnav-esp32c3-hud-8k.zip` và
+`out/vietnav-native-hud-r3-usb.zip`. USB native dùng quy trình query-first với
+wrapper TPMS 0.9.3 đã review. Các artifact này nằm ngoài Git.
 
-Yêu cầu sign-only mới thuộc `mzd-connect-emu`: đã sửa receiver/render giữ
-biển/chữ khi icon 0, thêm probe `sign` xuyên client/agent/MCP và test. Đã đối
-chiếu contract với firmware thật. `docs/requests/HUD-SIGN-ONLY.md` và bản nháp
-chủ xe nói tới chưa có trên `main` e2192d3; đã hỏi nhánh/commit, chưa nhận ref.
-Đã tiếp tục P2 trong repo emu, nhánh `codex/hud-sign-only`, commit `867b14e`:
-profile `--lab-hud-settings --usb-services` chọn chuỗi jcinavi/LDS/Time gốc.
-`hud_settings` qua guest/driver/Native MCP gọi Get/Set OEM và đọc lại giá trị,
-giữ nguyên cold state 0 (chưa biết) và `control_allowed=0` đã quan sát.
-Bài ARM/MCP đã qua: jcinavi STARTED, HUD/Navigation OFF→ON đọc lại đúng,
-HUD có/không có mặt tới cả hai getter gốc; clear→sign mới đi qua VBS/VIM
-gốc tới receiver và có ảnh biển 60/chữ không mũi tên. Đọc bằng chứng
-`results/2026-11-23/hud-sign-only/` và `docs/HUD-LAB.md` trong repo emu.
+HUD màu kính lái cho dẫn đường và biển báo đã chạy qua VBS/VIM Mazda trên
+ARM/QEMU 74.00.333A. Checkout repo `mzd-connect-emu` ở commit **`2d31d7b`**
+trên nhánh `codex/hud-sign-only`. Bản gói mới nằm trong `out/mzd-hud-whud-emu.zip`
+của repo emu. Bản gói `vietnav-hud-emu-complete.zip` tạo trước khi sửa cài đặt
+chứa kết quả readback cũ. [Hướng dẫn chạy trên local](https://github.com/dangkhoa116/mzd-connect-emu/tree/2d31d7b932238f437317487729f6a6ebef390327/docs/HUD-STOCK.vi.md)
 
-Bảng A–F và hiệu chỉnh ảnh xe còn mở: cần ref file yêu cầu và bản Traffic
-có sender HUD. Checkout Traffic `684e544` (1.7.6) chưa có sender đó. Không
-thay bài Traffic bằng probe tổng hợp. Cài đặt đọc lại từ dịch vụ OEM chưa
-chứng minh HEC/HUD vật lý đã áp dụng; nhánh native radio vẫn cần bài xe.
+**Đính chính `867b14e`.** Hai trường native 4/5 đã bị gán nhãn sai. Field 5
+điều khiển độ sáng. Display dùng native type 0 (0 ON / 1 OFF). NavigationSignal
+là khóa Settings riêng (1 ON / 2 OFF). Bằng chứng chuyển tiếp biển riêng và
+getter báo có HUD của lần chạy cũ vẫn có giá trị.
+
+Bài chạy ARM mới đã qua sáu tổ hợp thiết bị và công tắc, đổi riêng khoảng cách
+và tên đường, hết hạn cặp dở và dọn trạng thái khi firmware khởi động lại.
+Ảnh mô phỏng dùng glyph vector. Góc và vị trí chiếu cần đối chiếu HUD vật lý.
+Chiều cao và xoay cần phản hồi HEC để xác nhận. Phạm vi lần chạy là bộ thử
+dẫn đường và biển báo với client ARM tổng hợp.
+[Kết quả và ảnh](https://github.com/dangkhoa116/mzd-connect-emu/tree/2d31d7b932238f437317487729f6a6ebef390327/results/2026-11-23/hud-whud)
 
 ## Tiếp tục từ `907aebf`: sửa lỗi tích hợp native trước bài thử trên xe
 

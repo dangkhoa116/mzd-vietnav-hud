@@ -103,21 +103,21 @@ phiên cloud. Firmware/rootfs đã khôi phục từ ZIP người dùng cung c�
 ngoài Git. Bài radio thật, OEM `bds`/VBS chạy trên xe, chung sống với nhạc/
 cuộc gọi và ảnh HUD vật lý vẫn cần xác nhận riêng.
 
-## HUD sign-only và cài đặt gốc trong guest CMU
+## HUD màu kính lái trong guest Mazda
 
-Repo `mzd-connect-emu`, nhánh `codex/hud-sign-only`, commit `867b14e` đã có
-receiver/render giữ biển và chữ khi icon 0, probe `sign`, và profile
-`--lab-hud-settings --usb-services`. Profile chọn original jcinavi/LDS/Time
-với chuỗi dependency gốc; không giả lập một tiến trình NNG.
+Repo `mzd-connect-emu`, commit **`2d31d7b`** trên `codex/hud-sign-only`, đã
+kiểm lớp dẫn đường và biển báo qua VBS/VIM trên ARM/QEMU 74.00.333A. Profile
+`--lab-hud-settings --usb-services` chọn jcinavi/LDS/Time gốc. Chọn thiết bị
+`native_hud_settings(setting="variant", value=2)` để dùng WHUD màu trong guest.
+[Hướng dẫn chạy guest và xem ảnh](https://github.com/dangkhoa116/mzd-connect-emu/tree/2d31d7b932238f437317487729f6a6ebef390327/docs/HUD-STOCK.vi.md)
 
-`native_hud_settings` / thao tác driver `hud_settings` gọi API D-Bus của
-jcinavi và yêu cầu Get đọc lại sau Set. Bài ARM/MCP trên firmware gốc đã qua
-cả bật/tắt HUD và Navigation, cả hai getter có/không có HUD, và một cặp
-clear→sign-only mới đi qua VBS/VIM gốc tới receiver/ảnh. Đây là kiểm bằng
-client ARM tổng hợp; không nối radio VietMap vào guest và không thay thế
-bảng A–F của Traffic Alert. Readback là trạng thái dịch vụ OEM, chưa phải
-xác nhận HEC/HUD vật lý. Bản Traffic có sender HUD và file yêu cầu đang ở
-local của chủ xe chưa có trong các nguồn đã fetch.
+**Đính chính `867b14e`.** Hai trường native 4/5 bị gán nhầm nhãn.
+Field 5 điều khiển độ sáng. Display dùng native type 0 (0 ON / 1 OFF).
+NavigationSignal là khóa Settings riêng (1 ON / 2 OFF). Bản mới đọc cả hai từ
+dịch vụ Mazda gốc và chờ callback Settings sau cold boot.
 
-Đọc `docs/HUD-LAB.md` và `results/2026-11-23/hud-sign-only/` ở repo emu để
-build profile và chạy `scripts/check-native-hud-settings.py` từ máy local.
+Đã kiểm sáu tổ hợp thiết bị và công tắc, biển riêng, cập nhật độc lập khoảng
+cách/tên đường, hết hạn cặp dở và xóa trạng thái khi firmware reboot. Phép thử
+dùng client ARM tổng hợp. Chiều cao và xoay cần phản hồi HEC để xác nhận.
+Font, tỷ lệ và hình học chiếu cần đối chiếu HUD vật lý.
+[Kết quả ARM/QEMU](https://github.com/dangkhoa116/mzd-connect-emu/tree/2d31d7b932238f437317487729f6a6ebef390327/results/2026-11-23/hud-whud)
