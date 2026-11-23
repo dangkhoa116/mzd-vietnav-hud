@@ -102,3 +102,22 @@ Kết quả chi tiết, hash model và artifact nằm trong `out/hud-complete/` 
 phiên cloud. Firmware/rootfs đã khôi phục từ ZIP người dùng cung cấp và giữ
 ngoài Git. Bài radio thật, OEM `bds`/VBS chạy trên xe, chung sống với nhạc/
 cuộc gọi và ảnh HUD vật lý vẫn cần xác nhận riêng.
+
+## HUD sign-only và cài đặt gốc trong guest CMU
+
+Repo `mzd-connect-emu`, nhánh `codex/hud-sign-only`, commit `867b14e` đã có
+receiver/render giữ biển và chữ khi icon 0, probe `sign`, và profile
+`--lab-hud-settings --usb-services`. Profile chọn original jcinavi/LDS/Time
+với chuỗi dependency gốc; không giả lập một tiến trình NNG.
+
+`native_hud_settings` / thao tác driver `hud_settings` gọi API D-Bus của
+jcinavi và yêu cầu Get đọc lại sau Set. Bài ARM/MCP trên firmware gốc đã qua
+cả bật/tắt HUD và Navigation, cả hai getter có/không có HUD, và một cặp
+clear→sign-only mới đi qua VBS/VIM gốc tới receiver/ảnh. Đây là kiểm bằng
+client ARM tổng hợp; không nối radio VietMap vào guest và không thay thế
+bảng A–F của Traffic Alert. Readback là trạng thái dịch vụ OEM, chưa phải
+xác nhận HEC/HUD vật lý. Bản Traffic có sender HUD và file yêu cầu đang ở
+local của chủ xe chưa có trong các nguồn đã fetch.
+
+Đọc `docs/HUD-LAB.md` và `results/2026-11-23/hud-sign-only/` ở repo emu để
+build profile và chạy `scripts/check-native-hud-settings.py` từ máy local.

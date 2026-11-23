@@ -1,6 +1,6 @@
 # Bàn giao Vietnav để tiếp tục trên máy local
 
-Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc agent tiếp
+Cập nhật: **23-11-2026, giờ Việt Nam**. Dành cho người dùng hoặc agent tiếp
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
@@ -18,7 +18,7 @@ Kết quả phiên này:
   đúng nhóm hướng; không phải capture điện thoại mới.
 - 476 khung đưa qua ATT → ảnh → guidance → VBS ABI giả; host và ARM/QEMU
   xuất JSONL giống từng byte. Bus trong replay là fake, không phải VBS gốc.
-- **110 unittest native/HUD qua, không skip**, 229 kiểm tra mux; fuzz
+- **111 unittest native/HUD qua, không skip**, 229 kiểm tra mux; fuzz
   50.000 ATT + 50.000 nav + 20.000 JPEG mutation có sanitizer.
 - C3 codec: 9 test, có frame 6100 byte chia write 20 byte. Firmware C3 thường
   và extended được build bằng đúng core 3.3.2/NimBLE 2.3.7.
@@ -36,11 +36,19 @@ Yêu cầu sign-only mới thuộc `mzd-connect-emu`: đã sửa receiver/render
 biển/chữ khi icon 0, thêm probe `sign` xuyên client/agent/MCP và test. Đã đối
 chiếu contract với firmware thật. `docs/requests/HUD-SIGN-ONLY.md` và bản nháp
 chủ xe nói tới chưa có trên `main` e2192d3; đã hỏi nhánh/commit, chưa nhận ref.
-Phần chọn dịch vụ jcinavi, thao tác `hud_settings`, bảng A–F và hiệu chỉnh
-ảnh xe còn mở; không thêm cờ host giả hoặc đoán enum setting OEM. Hợp đồng
-Get/Set thực đã xác định từ binary, ghi trong `docs/HUD-SIGN-ONLY-STATUS.md`
-của repo emu. Không gộp các kiểm host/sign probe giả với một lần chạy OEM
-jcinavi hoặc Traffic Alert thật.
+Đã tiếp tục P2 trong repo emu, nhánh `codex/hud-sign-only`, commit `867b14e`:
+profile `--lab-hud-settings --usb-services` chọn chuỗi jcinavi/LDS/Time gốc.
+`hud_settings` qua guest/driver/Native MCP gọi Get/Set OEM và đọc lại giá trị,
+giữ nguyên cold state 0 (chưa biết) và `control_allowed=0` đã quan sát.
+Bài ARM/MCP đã qua: jcinavi STARTED, HUD/Navigation OFF→ON đọc lại đúng,
+HUD có/không có mặt tới cả hai getter gốc; clear→sign mới đi qua VBS/VIM
+gốc tới receiver và có ảnh biển 60/chữ không mũi tên. Đọc bằng chứng
+`results/2026-11-23/hud-sign-only/` và `docs/HUD-LAB.md` trong repo emu.
+
+Bảng A–F và hiệu chỉnh ảnh xe còn mở: cần ref file yêu cầu và bản Traffic
+có sender HUD. Checkout Traffic `684e544` (1.7.6) chưa có sender đó. Không
+thay bài Traffic bằng probe tổng hợp. Cài đặt đọc lại từ dịch vụ OEM chưa
+chứng minh HEC/HUD vật lý đã áp dụng; nhánh native radio vẫn cần bài xe.
 
 ## Tiếp tục từ `907aebf`: sửa lỗi tích hợp native trước bài thử trên xe
 
