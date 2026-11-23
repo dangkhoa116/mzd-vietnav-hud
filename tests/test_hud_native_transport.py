@@ -64,9 +64,8 @@ class NativeTransportTests(unittest.TestCase):
         if not existing_library:
             subprocess.run([compiler, '-std=gnu99', '-shared', '-fPIC', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
                             '-fno-builtin', '-DVN_VBS_HAVE_UNISTD',
-                            '-o', str(cls.library), str(cls.build / 'v3.c'),
-                            str(cls.build / 'hud_native.c'), str(cls.build / 'hud_guidance.c'),
-                            str(cls.build / 'vn_vbs.c'), str(cls.build / 'vn_vbs_dl.c'), '-ldl'], check=True)
+                            '-o', str(cls.library),
+                            *(str(cls.build/name) for name in prepare.C_SOURCES), '-ldl'], check=True)
         cls.child = cls.build / 'bds-child'
         subprocess.run([compiler, '-std=gnu99', '-Wall', '-Wextra', '-Werror',
                         str(ROOT / 'tests/native_bds_child.c'), '-lrt', '-o', str(cls.child)], check=True)

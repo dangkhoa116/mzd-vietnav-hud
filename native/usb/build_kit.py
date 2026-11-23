@@ -9,9 +9,12 @@ import subprocess
 import tarfile
 import tempfile
 import zipfile
+import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0,str(HERE.parent))
+from prepare import NATIVE_FILES
 BASE_SHA256 = '9026f4bc2336564b8c8da772a3df110de733d0fc4bf7d9f0582b8a3a97b39000'
 TPMS_SHA256 = '39ea9a0d9ff6c942b2798bb45c96cb222bb2bc8729c4ed938b065bf475c8cdd4'
 TRIGGER_FILES = ('jci-autoupdate', 'LAUNCHER.NAME', 'TOUCHTUNE.ID', 'LICENSE', 'NOTICE')
@@ -35,14 +38,19 @@ def build(dest, archive, build_dir, tpms, touchtune):
         raise ValueError('library must be ELF32 little-endian ARM')
     if report['glibc'] != ['GLIBC_2.4'] or report['optional_flag_difference'] & ~0x202:
         raise ValueError('unexpected ARM loader requirements')
+    if not 1 <= report.get('arrow_model_entries',0) <= 256:
+        raise ValueError('rebuild ARM with --arrow-model: a complete HUD kit needs arrow templates')
     wrapper = tpms / 'tpms/install/tpms-bds-wrapper.sh'
     if digest(wrapper) != BASE_SHA256 or digest(tpms / 'tpms/v3/v3.c') != TPMS_SHA256:
         raise ValueError('unsupported TPMS source/wrapper revision')
     # Ship exactly the sources that were compiled, and reject stale core copies.
-    for name in ('v3.c', 'hud_native.c', 'hud_native.h', 'tpms_adapter.inc'):
+    if set(report['compiled_sources']) != {'v3.c', *NATIVE_FILES}:
+        raise ValueError('ARM source manifest is incomplete; rebuild with the current builder')
+    for name in ('v3.c', *NATIVE_FILES):
         if digest(build_dir / name) != report['compiled_sources'][name]:
             raise ValueError('compiled source differs from ARM report: ' + name)
-    for name in ('hud_native.c', 'hud_native.h', 'tpms_adapter.inc'):
+    for name in NATIVE_FILES:
+        if name == 'arrow_model.c': continue  # generated model, verified by its build hash
         if (build_dir / name).read_bytes() != (HERE.parent / name).read_bytes():
             raise ValueError('rebuild ARM: source changed: ' + name)
     up = list((touchtune / 'usb').glob('*.up'))
@@ -74,12 +82,12 @@ def build(dest, archive, build_dir, tpms, touchtune):
         for path in [*(touchtune / 'usb' / f for f in TRIGGER_FILES), up[0]]:
             shutil.copyfile(path, stage / path.name)
         with tarfile.open(stage / 'CORRESPONDING-SOURCE.tar.gz', 'w:gz') as sources:
-            for directory in ('native', 'hud_emulator', 'tests'):
+            for directory in ('native', 'hud_emulator', 'bridge', 'tests'):
                 for path in sorted((ROOT / directory).rglob('*')):
                     if path.is_file() and '__pycache__' not in path.parts:
                         sources.add(path, 'vietnav/' + str(path.relative_to(ROOT)))
             sources.add(ROOT / 'LICENSE', 'vietnav/LICENSE')
-            for name in ('v3.c', 'hud_native.c', 'hud_native.h', 'tpms_adapter.inc', 'PROVENANCE.txt'):
+            for name in ('v3.c', *NATIVE_FILES, 'PROVENANCE.txt'):
                 sources.add(build_dir / name, 'compiled/' + name)
             sources.add(tpms / 'LICENSE', 'compiled/LICENSE.tpms')
             sources.add(wrapper, 'tpms/tpms-bds-wrapper.sh')
@@ -87,9 +95,10 @@ def build(dest, archive, build_dir, tpms, touchtune):
                 if path.is_file() and '.git' not in path.parts and '__pycache__' not in path.parts:
                     sources.add(path, 'TouchTune/' + str(path.relative_to(touchtune)))
         (stage / 'NATIVE-PROVENANCE.txt').write_text(
-            'VIETNAV native HUD trial 0.1.0; HUD-only; no car/radio validation.\n'
+            'VIETNAV native HUD trial 0.2.0; JPEG arrows + camera + VBS; no car/radio validation.\n'
             'This kit adds an independent one-start dispatcher + USB controller.\n'
             f'ARM SHA256: {digest(library)}\nTPMS wrapper SHA256: {BASE_SHA256}\n'
+            f'Arrow templates: {report["arrow_model_entries"]}; model SHA256: {report["arrow_model_sha256"]}\n'
             f'TPMS v3.c SHA256: {TPMS_SHA256}\n'
             'Native: AGPL-3.0-or-later; TPMS: MIT; TouchTune: GPL-3.0.\n'
             'https://github.com/dangkhoa116/mzd-vietnav-hud\n'

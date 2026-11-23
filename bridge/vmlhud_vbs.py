@@ -100,7 +100,7 @@ _DEFAULT_ICON = HUD_STRAIGHT
 
 def icon_for(maneuver, modifier):
     """Ma Mazda cho (kind, modifier) cua asset; modifier None -> straight."""
-    key = (maneuver, (modifier or "straight").strip().lower())
+    key = (maneuver, (modifier or "straight").strip().lower().replace('_', ' '))
     return _ASSET_ICON.get(key, _DEFAULT_ICON)
 
 
@@ -158,7 +158,9 @@ class GuidanceBuilder:
         road = (nav.next_road or nav.current_road).strip()
         if not road and not arrow:
             return None  # chua co du lieu chi dan
-        if arrow is not None and arrow.confident():
+        confidence = getattr(arrow, 'confident', False)
+        confidence = confidence() if callable(confidence) else confidence
+        if arrow is not None and confidence:
             icon = icon_for(arrow.maneuver, arrow.modifier)
         else:
             icon = self._last[0] if self._last else _DEFAULT_ICON

@@ -4,6 +4,44 @@ Cập nhật: **22-10-2026, giờ Việt Nam**. Dành cho người dùng hoặc 
 tục dự án sau phiên cloud này. Các đường dẫn `/workspace/...` bên dưới thuộc
 máy cloud cũ; thay bằng thư mục local tương ứng.
 
+## HUD emu native/C3 hiện tại: pipeline đã nối và có bản ARM
+
+Đọc [native/HUD-EMU.vi.md](native/HUD-EMU.vi.md) trước các mốc lịch sử dưới
+đây. Code mới đã có decoder JPEG C, model từ IPA của chủ xe, camera một/hai
+slot, giữ/xoá mũi tên, kết thúc tuyến, TTL nav 10 s và VBS sync/reset phiên.
+Ảnh lạ bị ẩn glyph thay vì đoán đi thẳng. Cả C3 và native dùng frame **8 KB**:
+23/119 asset JPEG chất lượng cao vượt 4 KB, ảnh lớn nhất đã kiểm 6027 byte.
+
+Kết quả phiên này:
+
+- 119 template từ IPA 3.4.3; **476/476** JPEG ở quality 60/80/95/100 nhận
+  đúng nhóm hướng; không phải capture điện thoại mới.
+- 476 khung đưa qua ATT → ảnh → guidance → VBS ABI giả; host và ARM/QEMU
+  xuất JSONL giống từng byte. Bus trong replay là fake, không phải VBS gốc.
+- **110 unittest native/HUD qua, không skip**, 229 kiểm tra mux; fuzz
+  50.000 ATT + 50.000 nav + 20.000 JPEG mutation có sanitizer.
+- C3 codec: 9 test, có frame 6100 byte chia write 20 byte. Firmware C3 thường
+  và extended được build bằng đúng core 3.3.2/NimBLE 2.3.7.
+- ARM GCC 4.9.1/glibc 2.11 đã build, 5 test preload/PTY với loader/libc
+  firmware gốc qua. `.so` thêm các API chuẩn được kiểm export, chỉ yêu cầu
+  GLIBC_2.4. Rootfs gốc đã khôi phục lại trong môi trường cloud hiện tại.
+
+Artifact cloud: `out/vietnav-esp32c3-hud-8k.zip`,
+`out/vietnav-native-hud-r3-usb.zip`, `out/vietnav-hud-emu-complete.zip`.
+Chúng là file ignored, không đi theo Git. USB native vẫn query-first, chỉ
+hỗ trợ wrapper TPMS 0.9.3 đã review; checkout TPMS 0.9.20 giữ nguyên. Chưa
+xác nhận native radio/VBS trên xe, không coi bản ARM hay replay là bài xe.
+
+Yêu cầu sign-only mới thuộc `mzd-connect-emu`: đã sửa receiver/render giữ
+biển/chữ khi icon 0, thêm probe `sign` xuyên client/agent/MCP và test. Đã đối
+chiếu contract với firmware thật. `docs/requests/HUD-SIGN-ONLY.md` và bản nháp
+chủ xe nói tới chưa có trên `main` e2192d3; đã hỏi nhánh/commit, chưa nhận ref.
+Phần chọn dịch vụ jcinavi, thao tác `hud_settings`, bảng A–F và hiệu chỉnh
+ảnh xe còn mở; không thêm cờ host giả hoặc đoán enum setting OEM. Hợp đồng
+Get/Set thực đã xác định từ binary, ghi trong `docs/HUD-SIGN-ONLY-STATUS.md`
+của repo emu. Không gộp các kiểm host/sign probe giả với một lần chạy OEM
+jcinavi hoặc Traffic Alert thật.
+
 ## Tiếp tục từ `907aebf`: sửa lỗi tích hợp native trước bài thử trên xe
 
 Đã đối chiếu **53 commit** sau bản bàn giao `e789b10`. Giữ các kết quả mới:

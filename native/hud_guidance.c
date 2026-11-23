@@ -114,12 +114,15 @@ static unsigned decode_var2(struct vn_nav *out, const unsigned char *p, unsigned
         if (p[5] > 1)
             return 0;
         o = 6;
+        out->image_flag = p[5];
     } else if (image_len > 1) {
         if (image_len > n)
             return 0;
         o = 5 + image_len;
         if (o + 4 > n)
             return 0;
+        out->image = p + 5;
+        out->image_len = image_len;
     } else
         return 0;
     out->direction = p[0];
@@ -339,7 +342,8 @@ int vn_guide_feed(struct vn_guide_state *st, struct vn_guidance *out,
     if (!trimmed[0] && !icon_hint)
         return 0; /* nothing to guide on yet */
     vn_normalize_vn(trimmed, out->road, VN_ROAD_MAX);
-    out->icon = icon_hint ? icon_hint : (st->has_last ? st->last_icon : VN_ICON_STRAIGHT);
+    out->icon = icon_hint == VN_ICON_HIDE_HINT ? VN_ICON_CLEAR :
+                (icon_hint ? icon_hint : (st->has_last ? st->last_icon : VN_ICON_STRAIGHT));
     out->distance = vn_map_distance(nav->distance_m, &unit);
     out->unit = unit;
     out->speed_limit = nav->speed_limit;

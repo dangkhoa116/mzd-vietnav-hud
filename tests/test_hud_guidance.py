@@ -26,13 +26,13 @@ class GuidanceStruct(C.Structure):
                 ('clear', C.c_uint8), ('road', C.c_char * 256)]
 
 
-def _compile(name, sources):
+def _compile(name, sources, flags=()):
     work = tempfile.mkdtemp(prefix='vietnav-guide-')
     lib = Path(work) / name
     cc = ['gcc'] if shutil.which('gcc') else [sys.executable, '-m', 'ziglang', 'cc']
     subprocess.run(cc + ['-std=c99', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
                          '-fsanitize=undefined', '-fno-sanitize-recover=all', '-shared', '-fPIC',
-                         '-I', str(ROOT / 'native')] +
+                         '-I', str(ROOT / 'native'), *flags] +
                    [str(ROOT / 'native' / src) for src in sources] + ['-o', str(lib)], check=True)
     return lib, work
 
@@ -348,6 +348,27 @@ class GuidanceTests(unittest.TestCase):
         self.assertEqual(self._guide(), -1)
         self.assertEqual(self.lib.gd_vbs_created(), 0)
 
+    def test_sender_failed_connect_retries_after_session_stop(self):
+        for stage in (0, 1):
+            self.lib.gd_vbs_reset()
+            self.lib.gd_vbs_set_fail(stage, 1)
+            self.assertEqual(self._guide(), -1)
+            self.lib.gd_vbs_set_fail(stage, 0)
+            self.assertEqual(self._guide(), -1)  # one attempt per session
+            self.assertEqual(self.lib.gd_vbs_created(), 1)
+            self.lib.vn_vbs_stop()
+            self.assertEqual(self._guide(), 0)
+            self.assertEqual(self.lib.gd_vbs_created(), 2)
+
+    def test_sender_clear_and_stop_use_matching_sync_in_both_messages(self):
+        self._guide(sync=4)
+        self._guide(clear=1, sync=5)
+        self.assertEqual(self.lib.gd_vbs_disp_sync(), 5)
+        self.assertEqual(self.lib.gd_vbs_msg2_sync(), 5)
+        self.lib.vn_vbs_stop()
+        self.assertEqual(self.lib.gd_vbs_disp_sync(), 6)
+        self.assertEqual(self.lib.gd_vbs_msg2_sync(), 6)
+
 
 class WireGuidanceTests(unittest.TestCase):
     """Full stack: ATT writes -> frame reassembly -> decode -> guide callback."""
@@ -355,7 +376,8 @@ class WireGuidanceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.core_lib, cls.core_work = _compile(
-            'core.so', ['hud_native.c', 'hud_guidance.c', '../tests/native_driver.c'])
+            'core.so', ['hud_native.c', 'hud_guidance.c', '../tests/native_driver.c'] +
+            getattr(cls, 'extra_sources', []), getattr(cls, 'extra_flags', ()))
         cls.lib = C.CDLL(str(cls.core_lib))
         lib = cls.lib
         lib.test_caps.argtypes = [C.c_char_p, C.c_char_p, C.c_uint, C.c_uint, C.c_uint]
@@ -420,7 +442,7 @@ class WireGuidanceTests(unittest.TestCase):
         self._write_handle(14, self._nav_frame(0x40, 150, 'Nguyen Van Linh', 'Le Dai Hanh'))
         self.assertEqual(self.lib.test_guide_count(), 1)
         got = self.lib.test_guide_at(0).contents
-        self.assertEqual(got.icon, 1)
+        self.assertEqual(got.icon, 0)  # no image received: do not guess straight
         self.assertEqual(got.distance, 1500)
         self.assertEqual(got.unit, 1)
         self.assertEqual(got.road.decode(), 'Nguyen Van Linh')
@@ -470,15 +492,15 @@ class WireGuidanceTests(unittest.TestCase):
         length = size - len(encode(0x40, payload)) + 1
         return encode(0x40, payload[:1] + struct.pack('>I', length) + b'J' * length + payload[6:])
 
-    def test_frame_at_4096_byte_limit_is_accepted(self):
-        frame = self._image_frame_of_size(4096)
-        self.assertEqual(len(frame), 4096)
+    def test_frame_at_8192_byte_limit_is_accepted(self):
+        frame = self._image_frame_of_size(8192)
+        self.assertEqual(len(frame), 8192)
         self._write_handle(14, frame)
         self.assertEqual(self.lib.test_guide_count(), 1)
 
     def test_oversize_frame_is_rejected_and_next_frame_still_guides(self):
-        frame = self._image_frame_of_size(4097)
-        self.assertEqual(len(frame), 4097)
+        frame = self._image_frame_of_size(8193)
+        self.assertEqual(len(frame), 8193)
         self._write_handle(14, frame)
         self.assertEqual(self.lib.test_guide_count(), 0)
         self._write_handle(14, self._nav_frame(0x40, 90, 'Road'))

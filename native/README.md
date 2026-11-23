@@ -1,5 +1,10 @@
 # VIETNAV HUD native — bản thử cho CMU150
 
+**Bản mới:** [HUD emu đầy đủ đường xử lý và cách chạy](HUD-EMU.vi.md) đã có
+nhận dạng JPEG native, camera, TTL, bản ARM và USB R3 có model. Các ghi chú
+"icon giữ mặc định thẳng" của bản triển khai cũ bên dưới được thay bởi bản
+mới: ảnh lạ bị ẩn, ảnh hợp lệ đổi glyph, flag 1 giữ và flag 0 xoá.
+
 Đã có code C và bản ARM thử nghiệm, tái sử dụng lớp HCI/UART của TPMS v3.
 **Chưa thử với radio Mazda/iPhone thật; chưa gửi nhánh này lên VBS/HUD.**
 Bộ cài USB VIETNAV 0.9.1 và checkout TPMS giữ nguyên.
@@ -27,10 +32,9 @@ thu log, huỷ lịch và gỡ; chỉ chạy HUD ở một lần khởi động 
   (docs/hud-dart-layer-analysis.vi.md). Chưa xác nhận UID runtime.
 - Ghi BLE write của chính HUD thành `VML RX`. Tool Python đọc lại thành
   navigation/camera/heartbeat, kể cả legacy. Assembler bắt tay C chỉ xử lý
-  khung mới, giới hạn **4096 byte** (cùng giới hạn bản C3). Khung có JPEG
-  2438 byte đã ghi nhận trong capture vượt giới hạn 2048 cũ. Khung đúng
-  4096 byte được nhận; quá giới hạn bị loại và vẫn nhận được khung kế tiếp.
-  Đây là kiểm transport bằng fixture, không phải nhận dạng nội dung JPEG.
+  khung mới, giới hạn **8192 byte** (cùng giới hạn bản C3). Ảnh JPEG dựng từ asset app
+  chất lượng cao đạt 6027 byte; giới hạn 4 KB vẫn loại 23/119 mẫu. Khung đúng
+  8192 byte được nhận; 8193 byte bị loại và vẫn nhận khung kế tiếp.
 - **Đường VBS đã nối (host, chưa lên xe)**: khung nav CMD 0x00/0x40 được giải
   mã ngay trong core C (`hud_guidance.c`, parity từng field với
   `bridge/vmlhud_nav.py` + `vmlhud_vbs.py`, test 19 case), gộp thành guidance
@@ -40,8 +44,10 @@ thu log, huỷ lịch và gỡ; chỉ chạy HUD ở một lần khởi động 
   riêng `com.jci.vietnav.hud`, probe GetHUDStatus fail-open, Msg2 luôn đi kèm
   Msg1, tên đường trống thành một dấu cách). Tên đường tiếng Việt được chuẩn
   hoá 3 byte → 2 byte cho font HUD (port từ hud_send.cpp của
-  mazda-carplay-hud). Icon: giữ icon cũ, mặc định thẳng — nhận dạng mũi tên
-  JPEG cần bộ fingerprint offline, vẫn nằm phía Python.
+  mazda-carplay-hud). Icon: decoder JPEG C và model từ IPA/APK của chủ xe nhận dạng mũi tên
+  ngay trong native. Flag 1 giữ ảnh cũ, flag 0 xoá; ảnh lạ hoặc thiếu model
+  ẩn glyph. Camera một/hai slot cập nhật biển tốc độ; ngừng nhận nav 10 s
+  xoá guidance một lần. Xem `HUD-EMU.vi.md` cho giới hạn và cách dựng model.
 - Tên đường được sao chép theo codepoint UTF-8: giữ đủ ký tự có dấu cuối
   tên như `Nguyễn Huệ`; chỉ bỏ chuỗi byte chưa đủ ở ranh giới field fixed.
   Khoảng cách theo hợp đồng OEM `distanceValue = đơn vị * 10`: 150 m →
@@ -174,8 +180,8 @@ khi query thành công với cùng thư viện/monitor/BLE pack/bds.real.
 Mốc cần xác nhận: VietMap tìm thấy HUD, mở GATT, nhận HUDInfo và gửi
 navigation **và guidance thật lên được VBS/HUD xe** (đường VBS đã code xong,
 chưa từng chạy trên xe — dlopen libjcidbus/libjcivbsnaviclient trong bds,
-bus name `com.jci.vietnav.hud`). Sau đó chốt bảng mã hướng rẽ từ ảnh mũi tên
-(nhận dạng vẫn phía Python) và xem speed/current_road có đổ khi chạy xe.
+bus name `com.jci.vietnav.hud`). Nhận dạng JPEG đã chạy ở native/ARM; cần đối chiếu mũi tên, biển và
+speed/current_road với điện thoại/xe thật.
 Chưa hỗ trợ TPMS central + HUD peripheral đồng thời. TPMS trở lại ở lần
 start kế tiếp, không bật lại giữa phiên native khi hết thời gian thử.
 

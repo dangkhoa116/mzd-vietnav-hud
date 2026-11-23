@@ -141,20 +141,24 @@ int vn_vbs_guide(const struct vn_guidance *g)
         disp.display_speed_limit = (uint16_t)g->speed_limit;
         disp.display_speed_unit = g->speed_limit ? 1 : 0; /* 1 = km/h */
         disp.text_id3 = (uint8_t)g->sync;
+        vn_vbs.sync = disp.text_id3;
         return send_pair(&disp, g->road[0] ? g->road : blank, (uint8_t)g->sync);
     }
-    vn_vbs.sync = vn_vbs.sync % 7u + 1u; /* re-page the strip on the wipe */
+    vn_vbs.sync = g->sync>=1 && g->sync<=7 ? (uint8_t)g->sync : vn_vbs.sync % 7u + 1u;
     disp.text_id3 = vn_vbs.sync;
     return send_pair(&disp, blank, vn_vbs.sync);
 }
 
 void vn_vbs_stop(void)
 {
+    /* Re-arm a failed lazy connect too: there may be no connection to free. */
+    vn_vbs.connect_failed = 0;
     if (!vn_vbs.conn)
         return;
     if (!vn_vbs.hud_absent) {
-        static const struct vn_vbs_display disp; /* all zero = blank HUD */
+        struct vn_vbs_display disp = {0};
         vn_vbs.sync = vn_vbs.sync % 7u + 1u;
+        disp.text_id3 = vn_vbs.sync;
         send_pair(&disp, " ", vn_vbs.sync);
 #ifdef VN_VBS_HAVE_UNISTD
         usleep(50 * 1000); /* let the OEM worker flush before it stops */

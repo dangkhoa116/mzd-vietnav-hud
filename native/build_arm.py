@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
-from prepare import HERE, SOURCE_SHA256, prepare
+from prepare import HERE, SOURCE_SHA256, NATIVE_FILES, C_SOURCES, load_arrow_model, prepare
 
 
 def inspect_elf(readelf, path):
@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--toolchain', type=Path, required=True)
     parser.add_argument('--out', type=Path, default=HERE.parent / 'out/native-build')
     parser.add_argument('--tpms', type=Path, default=HERE.parents[1] / 'mzd-connect-tpms')
+    parser.add_argument('--arrow-model', type=Path)
     args = parser.parse_args()
     toolchain, output, tpms = args.toolchain.resolve(), args.out.resolve(), args.tpms.resolve()
     prefix = toolchain / 'bin/arm-cortexa9_neon-linux-gnueabi-'
@@ -46,18 +47,27 @@ def main():
     try:
         if not (sysroot / 'lib/libc-2.11.so').exists():
             raise ValueError('toolchain must include the CMU glibc 2.11 sysroot')
-        prepare(tpms / 'tpms/v3/v3.c', output)
+        prepare(tpms / 'tpms/v3/v3.c', output, args.arrow_model)
         library = output / 'libvietnav-native-arm.so'
         subprocess.run([cc, '-std=gnu99', '--sysroot=' + str(sysroot), '-shared', '-fPIC', '-O2',
                         '-Wall', '-Wextra', '-Werror', '-fno-builtin', '-fno-stack-protector', '-s',
                         '-DVN_VBS_HAVE_UNISTD',
-                        '-o', str(library), str(output / 'v3.c'), str(output / 'hud_native.c'),
-                        str(output / 'hud_guidance.c'), str(output / 'vn_vbs.c'),
-                        str(output / 'vn_vbs_dl.c'), '-ldl'], check=True)
+                        '-o', str(library), *(str(output/name) for name in C_SOURCES), '-ldl'], check=True)
         report = inspect_elf(readelf, library)
         baseline = inspect_elf(readelf, tpms / 'tpms/v1/libtpms-v1.so')
-        if set(report['required_symbols']) - set(baseline['required_symbols']):
-            raise ValueError('new required loader symbols compared with the on-car v1 baseline')
+        additional = set(report['required_symbols']) - set(baseline['required_symbols'])
+        # Guidance/VBS adds these standard glibc/libdl APIs. Check their
+        # actual exports in the CMU-era sysroot instead of dropping the gate.
+        approved = {'dlopen', 'memcpy', 'snprintf', 'usleep'}
+        exports = set()
+        for library_name in ('libc-2.11.so', 'libdl-2.11.so'):
+            symbols = subprocess.check_output([readelf, '--dyn-syms', '-W',
+                                               str(sysroot/'lib'/library_name)], text=True)
+            for line in symbols.splitlines():
+                fields = line.split()
+                if len(fields)>=8 and fields[6]!='UND': exports.add(fields[7].split('@')[0])
+        if additional - approved or additional - exports:
+            raise ValueError('unverified new loader symbols: '+str(sorted(additional)))
         if set(report['relocations']) - set(baseline['relocations']):
             raise ValueError('new relocation types compared with the on-car v1 baseline')
         # GNU m3 ld and the baseline linker set optional legacy flags differently.
@@ -67,13 +77,13 @@ def main():
             raise ValueError('unexpected ELF flag difference from the baseline')
         report.update(sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                       compiled_sources={name: hashlib.sha256((output / name).read_bytes()).hexdigest()
-                                        for name in ('v3.c', 'hud_native.c', 'hud_native.h',
-                                                     'hud_guidance.c', 'hud_guidance.h',
-                                                     'vn_vbs.c', 'vn_vbs.h', 'vn_vbs_dl.c',
-                                                     'tpms_adapter.inc')},
+                                        for name in ('v3.c', *NATIVE_FILES)},
+                      arrow_model_entries=load_arrow_model(args.arrow_model)[1] if args.arrow_model else 0,
+                      arrow_model_sha256=hashlib.sha256(args.arrow_model.read_bytes()).hexdigest() if args.arrow_model else None,
                       tpms_source_sha256=SOURCE_SHA256,
                       compiler=subprocess.check_output([cc, '--version'], text=True).splitlines()[0],
                       baseline_flags=baseline['flags'], optional_flag_difference=flag_difference,
+                      additional_verified_symbols=sorted(additional),
                       baseline='mzd-connect-tpms/tpms/v1/libtpms-v1.so',
                       status='experimental HUD-only; not tested on car')
         (output / 'ARM-CHECKS.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')

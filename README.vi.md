@@ -10,6 +10,11 @@
 
 ## Đang phát triển: giả lập HUD VietMap
 
+[HUD emu native hiện tại](native/HUD-EMU.vi.md): đã nối JPEG → hướng rẽ,
+camera/giới hạn tốc độ, kết thúc tuyến và xoá dữ liệu quá hạn. Có replay C
+trên host/ARM, model từ IPA của chủ xe và bộ USB thử R3; radio/HUD xe thật
+vẫn là bài kiểm riêng, không suy từ kết quả offline.
+
 Đã có bản thử Linux/BlueZ và decoder giao thức HUD của VML 3.4.3.
 **App iOS 3.4.3 đã chấp nhận emulator ESP32-C3, hoàn tất HUDInfo và bắt đầu
 streaming**, theo [probe điện thoại](docs/hud-dart-layer-analysis.vi.md).

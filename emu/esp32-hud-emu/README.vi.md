@@ -173,7 +173,7 @@ chọn **ESP32C3 Dev Module**, **USB CDC On Boot: Enabled**, flash 4MB,
   H50: service FFFF, 9ABC write, 1234 notify. Cả tên và UUID được đặt trong
   gói quảng bá primary legacy để hỗ trợ cả passive scan.
 - Một central tại một thời điểm; hai buffer nhận riêng theo họ thiết bị.
-  Nhận tối đa 4096 byte/khung, kiểm checksum mặc định/CRC và mọi độ dài trước
+  Nhận tối đa 8192 byte/khung, kiểm checksum mặc định/CRC và mọi độ dài trước
   khi đọc. Ảnh mũi tên lớn hơn giới hạn sẽ bị loại và có log.
 - Khung mới C3 có trailer **8 byte** (hai checksum 4 byte từ MD5+UID), không
   phải MD5 thô 16 byte. Khung cũ C5 dùng CRC16. Phản hồi chia notify **20 byte**

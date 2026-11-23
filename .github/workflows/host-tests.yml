@@ -33,6 +33,8 @@ jobs:
           - test_hud_protocol
           - test_hud_bluez
           - test_hud_guidance
+          - test_hud_arrow_native
+          - test_hud_emu
           - test_vmlhud_bridge
           - test_vmlhud_arrow
           - test_vmlhud_hud_out

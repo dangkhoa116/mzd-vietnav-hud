@@ -75,6 +75,13 @@ class DistanceTests(unittest.TestCase):
 
 
 class GuidanceBuilderTests(unittest.TestCase):
+    def test_real_arrow_match_property_and_underscore_modifier(self):
+        from vmlhud_arrow import ArrowMatch
+        arrow=ArrowMatch(asset='direction_turn_sharp_right',maneuver='turn',
+                         modifier='sharp_right',score=1,margin=0.5)
+        guidance=vbs.GuidanceBuilder().feed(nav(),arrow)
+        self.assertEqual(guidance.icon,vbs.HUD_SHARP_RIGHT)
+
     def test_first_guidance_with_arrow(self):
         b = vbs.GuidanceBuilder()
         g = b.feed(nav(), FakeArrow("end_of_road", "right"))

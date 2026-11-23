@@ -373,8 +373,8 @@ class KitBuilder(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('native_kit', USB / 'build_kit.py')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        build_dir = ROOT / 'out/native-build'
-        tpms = ROOT.parent / 'mzd-connect-tpms'
+        build_dir = Path(os.environ.get('VIETNAV_TEST_ARM_BUILD', ROOT / 'out/native-build'))
+        tpms = Path(os.environ.get('VIETNAV_TPMS_SOURCE', ROOT.parent / 'mzd-connect-tpms'))
         touchtune = ROOT.parent / 'tpms-build/TouchTune'
         if not all(p.exists() for p in (build_dir / 'ARM-CHECKS.json', tpms, touchtune)):
             self.skipTest('local ARM artifact/TPMS/TouchTune needed for packaging integration')

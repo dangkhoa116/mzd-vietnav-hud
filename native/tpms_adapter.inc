@@ -2,6 +2,18 @@
  * Included in a generated copy of MIT-licensed TPMS v3.c, after env_ul().
  * The source checkout is never edited. All UART I/O still uses its mux/lock.
  */
+#include "hud_arrow.h"
+static unsigned vn_match_arrow(void *user, const unsigned char *jpeg, unsigned n)
+{
+    struct vn_arrow_result result;
+    (void)user;
+    if (!vn_arrow_match(vn_arrow_model, vn_arrow_model_size, jpeg, n, &result)) {
+        emit_mark("VML arrow unrecognized; glyph hidden");
+        return 0;
+    }
+    emit_mark_u("VML arrow icon: ", result.icon);
+    return result.icon;
+}
 static int vn_same(const char *a, const char *b)
 {
     if (!a)
@@ -42,6 +54,7 @@ static void vn_setup(void)
     const char *mode = getenv("VIETNAV_NATIVE_MODE");
     struct vn_io io = {0, vn_send_packet, vn_record_packet, vn_guide_out};
     vn_init(&vn_native, io);
+    vn_set_arrow_matcher(&vn_native, vn_match_arrow, 0);
     vn_mode = vn_same(mode, "query") ? 1 : (vn_same(mode, "advertise") ? 2 : 0);
     /* This binary has no implicit TPMS mode. No environment = inert preload.
      * Original unit tests can still drive the inherited mux directly.
@@ -54,6 +67,8 @@ static void vn_setup(void)
     vn_vbs_set_logger(vn_vbs_log_mark);
     if (vn_mode == 2) {
         struct vn_vbs_calls calls;
+        emit_mark(vn_arrow_model_valid(vn_arrow_model, vn_arrow_model_size) ?
+                    "VML arrow model loaded" : "VML no arrow model; unknown glyphs hidden");
         if (vn_vbs_dl_resolve(&calls))
             vn_vbs_bind(&calls);
         else
@@ -107,7 +122,7 @@ static void vn_native_tick(void)
     /* Link gone or trial winding down: wipe the HUD once and release the
      * OEM service bus. The cluster keeps the last frame across sessions,
      * and nothing else clears it for us. */
-    if (vn_vbs_active() && vn_native.state != VN_CONNECTED)
+    if (vn_native.state != VN_CONNECTED)
         vn_vbs_stop();
 }
 static void vn_native_reply(const unsigned char *p, unsigned n)

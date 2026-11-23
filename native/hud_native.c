@@ -119,6 +119,18 @@ void vn_init(struct vn_hud *v, struct vn_io io)
     v->handle = -1;
     v->state = VN_OFF;
 }
+void vn_set_arrow_matcher(struct vn_hud *v,
+                          unsigned (*match)(void *, const unsigned char *, unsigned), void *user)
+{
+    v->match_arrow = match;
+    v->arrow_user = user;
+}
+static void push_guidance(struct vn_hud *v, const struct vn_nav *nav, unsigned icon)
+{
+    struct vn_guidance g;
+    if (vn_guide_feed(&v->guide, &g, nav, icon) && v->io.guide)
+        v->io.guide(v->io.user, &g);
+}
 
 int vn_caps_ready(const struct vn_caps *c)
 {
@@ -149,6 +161,7 @@ int vn_start(struct vn_hud *v, const struct vn_caps *c, int advertise, uint64_t 
     if (!duration_ms || duration_ms > 180000)
         duration_ms = 60000;
     v->expires = now + duration_ms;
+    v->now = now;
     v->state = VN_CONFIG;
     v->stage = 0;
     record(v, "VML native HUD-only trial", 0, 0);
@@ -242,11 +255,12 @@ static void reset_link(struct vn_hud *v)
     /* New session: the guidance stream restarts so a reconnected app re-emits
      * its first live frame instead of being deduped against the old route. */
     vn_guide_reset(&v->guide);
+    v->have_nav = v->camera_limit = 0;
 }
 
 void vn_connected(struct vn_hud *v, unsigned status, unsigned handle, unsigned role, uint64_t now)
 {
-    (void)now;
+    v->now = now;
     if (status) {
         record(v, "VML connection failed", 0, 0);
         return;
@@ -290,6 +304,14 @@ void vn_completed(struct vn_hud *v, unsigned handle, unsigned count)
 
 void vn_tick(struct vn_hud *v, uint64_t now, int command_allowed)
 {
+    v->now = now;
+    if (v->state == VN_CONNECTED && v->have_nav && now - v->nav_at >= VN_GUIDANCE_STALE_MS) {
+        struct vn_nav idle = v->last_nav;
+        idle.distance_m = VN_IDLE_DISTANCE;
+        v->have_nav = v->camera_limit = 0;
+        push_guidance(v, &idle, 0);
+        record(v, "VML navigation stale; HUD cleared", 0, 0);
+    }
     unsigned char p[32], b[32];
     unsigned n = 0, op = 0, i;
     if (v->state == VN_OFF || v->state == VN_DONE || v->state == VN_FAILED)
@@ -483,16 +505,50 @@ static void wire_frame(struct vn_hud *v, const unsigned char *p, unsigned n)
         }
     cmd = p[12];
     record(v, "VML FRAME CMD", &cmd, 1);
+    if (cmd == 1 && (n == 25 || n == 29)) {
+        unsigned limit = 0, nearest = 0xffffu, distance, slot;
+        /* One or two camera slots: type, BE16 distance, speed limit.
+         * Zero limit hides the roundel, including the observed no-camera
+         * sentinel 100000 modulo 65536. Use the nearest nonzero limit. */
+        for (slot = 13; slot < n - 8; slot += 4) {
+            distance = ((unsigned)p[slot + 1] << 8) | p[slot + 2];
+            if (p[slot + 3] && distance <= nearest) {
+                nearest = distance;
+                limit = p[slot + 3];
+            }
+        }
+        v->camera_limit = limit;
+        if (v->have_nav) {
+            v->last_nav.speed_limit = limit;
+            push_guidance(v, &v->last_nav, 0);
+        }
+        return;
+    }
     if (cmd == 0 || cmd == 0x40) {
-        /* Navigation push (0x00 = layouts v1/fixed, 0x40 = variable v2 with
-         * the JPEG arrow). Icon hint stays 0 here: classifying the arrow
-         * image needs the offline fingerprint set, so the HUD holds the last
-         * icon (straight initially) - distance/road/clear are all live. */
+        /* A new image replaces the previous glyph, retain flag 1 holds it,
+         * flag 0 or a rejected/unknown image hides it instead of guessing. */
         struct vn_nav nav;
-        struct vn_guidance guidance;
-        if (vn_nav_decode(&nav, p + 12, n - 20) && v->io.guide) {
-            if (vn_guide_feed(&v->guide, &guidance, &nav, 0))
-                v->io.guide(v->io.user, &guidance);
+        unsigned icon = 0;
+        if (vn_nav_decode(&nav, p + 12, n - 20)) {
+            if (nav.direction == 0xff)
+                nav.distance_m = VN_IDLE_DISTANCE;
+            if (nav.image_len) {
+                if (v->match_arrow)
+                    icon = v->match_arrow(v->arrow_user, nav.image, nav.image_len);
+                if (!icon) icon = VN_ICON_HIDE_HINT;
+            } else if ((cmd == 0x40 && !nav.image_flag) ||
+                       (!v->guide.has_last && nav.direction == 0xfe))
+                icon = VN_ICON_HIDE_HINT;
+            nav.speed_limit = v->camera_limit;
+            push_guidance(v, &nav, icon);
+            v->have_nav = nav.distance_m != VN_IDLE_DISTANCE;
+            if (!v->have_nav) v->camera_limit = 0;
+            v->last_nav = nav;
+            /* Never retain pointers into the reusable frame buffer. */
+            v->last_nav.image = 0;
+            v->last_nav.image_len = 0;
+            v->last_nav.image_flag = 1;
+            v->nav_at = v->now;
         }
         return;
     }

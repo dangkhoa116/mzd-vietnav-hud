@@ -54,6 +54,17 @@ class Esp32CodecTests(unittest.TestCase):
             self.assertEqual([f['cmd'] for f in frames],[14,2])
             self.assertEqual([f['payload'] for f in frames],['00','ff'])
 
+    def test_high_quality_arrow_sized_frame_exceeds_old_4k_bound(self):
+        payload=bytes(i%256 for i in range(6100))
+        frame=encode(64,payload)
+        chunks=','.join(frame[i:i+20].hex() for i in range(0,len(frame),20))
+        self.assertEqual(json.loads(self.run_codec('feed',chunks))['payload'],payload.hex())
+        # 8193-byte declared frame is rejected, then the next complete frame
+        # still gets decoded. No large payload is needed to test the bound.
+        prefix=bytes.fromhex('a55a37c3')+(8185).to_bytes(4,'big')
+        output=self.run_codec('feed',(prefix+frame).hex())
+        self.assertEqual(json.loads(output)['payload'],payload.hex())
+
     def test_reject_corruption_and_hostile_lengths_then_resync(self):
         good=encode(14,b'\0');bad=bytearray(good);bad[-1]^=1
         prefix=bytes.fromhex('a55a37c3ffffffff')+bytes.fromhex('a55a37c30000000c')+bytes(bad)

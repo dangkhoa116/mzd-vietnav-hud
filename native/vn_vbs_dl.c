@@ -8,6 +8,9 @@
  * connection lifecycle, then libjcivbsnaviclient for the VBS_NAVI setters.
  * RTLD_GLOBAL so the navi client's own DT_NEEDED on libjcidbus resolves.
  */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
 #include "vn_vbs.h"
 #include <dlfcn.h>
 #include <stdio.h>

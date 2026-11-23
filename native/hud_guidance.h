@@ -20,6 +20,7 @@
 #define VN_UNIT_KM 3u
 #define VN_ICON_CLEAR 0u
 #define VN_ICON_STRAIGHT 1u
+#define VN_ICON_HIDE_HINT 0xFFFFFFFFu
 
 enum vn_nav_layout { VN_NAV_NONE = 0, VN_NAV_FIXED, VN_NAV_VAR1, VN_NAV_VAR2 };
 
@@ -28,9 +29,12 @@ struct vn_nav {
     uint32_t remain_time_s; /* hours*3600 + minutes*60 + raw third byte */
     uint32_t remain_dist_m;
     uint32_t speed_kmh; /* observed; still unconfirmed on the wire */
-    uint32_t speed_limit; /* camera/sign feed; 0 until that frame is decoded */
+    uint32_t speed_limit; /* camera/sign feed; 0 hides the roundel */
     uint8_t direction;  /* always 0xFE on iOS 3.4.3; kept for the log */
     uint8_t layout;     /* enum vn_nav_layout */
+    uint8_t image_flag; /* 0 = clear, 1 = retain previous image */
+    const unsigned char *image; /* valid only for the current decode call */
+    uint32_t image_len;
     char next_road[VN_ROAD_MAX];
     char current_road[VN_ROAD_MAX];
 };

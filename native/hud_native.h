@@ -5,9 +5,10 @@
 #include "hud_guidance.h"
 
 #define VN_MTU 23
-/* Observed custom-arrow JPEGs alone reach 2438 bytes. Match the C3 bound. */
-#define VN_FRAME_MAX 4096
+/* Owner-app high-quality arrows reach 6027 bytes before frame overhead. */
+#define VN_FRAME_MAX 8192
 #define VN_QUEUE 16
+#define VN_GUIDANCE_STALE_MS 10000u
 /* Name proven against VIETMAP LIVE 3.4.3 on iOS: must contain "HUD".
  * Must stay 11 bytes - the advertisement and GAP-name reads copy exactly 11. */
 #define VN_NAME "VIETMAP-HUD"
@@ -43,11 +44,18 @@ struct vn_hud {
     unsigned char wire[VN_FRAME_MAX];
     unsigned wire_len;
     struct vn_guide_state guide;
+    struct vn_nav last_nav;
+    unsigned have_nav, camera_limit;
+    uint64_t now, nav_at;
+    void *arrow_user;
+    unsigned (*match_arrow)(void *, const unsigned char *, unsigned);
     unsigned char info[128];
     unsigned info_len, info_at;
 };
 
 void vn_init(struct vn_hud *, struct vn_io);
+void vn_set_arrow_matcher(struct vn_hud *,
+                          unsigned (*match)(void *, const unsigned char *, unsigned), void *user);
 int vn_caps_ready(const struct vn_caps *);
 int vn_start(struct vn_hud *, const struct vn_caps *, int advertise, uint64_t now,
              unsigned duration_ms);

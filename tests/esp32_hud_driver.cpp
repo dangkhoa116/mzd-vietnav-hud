@@ -42,7 +42,7 @@ int main(int argc,char **argv) {
         hex(out,n);std::cout<<'\n';return 0;
     }
     if (mode=="feed" && argc==3) {
-        vmhud::Receiver<4096> rx;const std::string chunks=argv[2];size_t offset=0;
+        vmhud::Receiver<8192> rx;const std::string chunks=argv[2];size_t offset=0;
         for (;;) {
             const size_t end=chunks.find(',',offset);
             const auto bytes=unhex(chunks.substr(offset,end==std::string::npos?end:end-offset));
@@ -65,9 +65,9 @@ int main(int argc,char **argv) {
         return 0;
     }
     if (mode=="fuzz") {
-        std::mt19937 random(0x5631);vmhud::Receiver<4096> rx;
+        std::mt19937 random(0x5631);vmhud::Receiver<8192> rx;
         for (unsigned i=0;i<50000;i++) {
-            std::vector<uint8_t> data(random()%6000);
+            std::vector<uint8_t> data(random()%10000);
             for (auto &byte:data) byte=uint8_t(random());
             rx.feed(data.data(),data.size(),sum,ignore,nullptr);
             vmhud::Frame frame;vmhud::Nav nav;

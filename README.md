@@ -10,6 +10,11 @@ English | [Tiếng Việt](README.vi.md)
 
 ## In progress: VietMap BLE HUD emulation
 
+The [native HUD emulator guide](native/HUD-EMU.vi.md) covers the completed C
+processing path: JPEG arrow classification, camera limits, route end/stale
+clearing, host/ARM replay and the R3 USB trial with an owner-supplied model.
+Offline results do not establish native radio or physical HUD acceptance.
+
 The Linux/BlueZ `VIETNAV HUD` prototype and offline decoder implement the HUD
 wire formats found in the supplied VML 3.4.3 IPA, including navigation, road
 names and camera data. Codec/CLI/D-Bus tests cover the Linux prototype.

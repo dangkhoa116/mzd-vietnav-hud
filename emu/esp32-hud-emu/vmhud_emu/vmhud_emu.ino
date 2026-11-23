@@ -34,7 +34,7 @@ std::atomic<bool> g_connected{false};
 uint16_t g_conn=BLE_HS_CONN_HANDLE_NONE;
 NimBLECharacteristic *g_h1=nullptr, *g_h50=nullptr;
 bool g_subH1=false, g_subH50=false;
-vmhud::Receiver<4096> g_rxH1, g_rxH50;
+vmhud::Receiver<8192> g_rxH1, g_rxH50;
 
 bool sdkChecksum(const uint8_t *p, size_t n, const uint8_t *uid, uint8_t *out) {
   uint8_t digest[16];
@@ -126,8 +126,8 @@ struct SubscribeCB : NimBLECharacteristicCallbacks {
   }
 };
 struct WriteCB : NimBLECharacteristicCallbacks {
-  NimBLECharacteristic *route;const char *label;vmhud::Receiver<4096> *rx;
-  WriteCB(NimBLECharacteristic *r,const char *l,vmhud::Receiver<4096> *b):route(r),label(l),rx(b) {}
+  NimBLECharacteristic *route;const char *label;vmhud::Receiver<8192> *rx;
+  WriteCB(NimBLECharacteristic *r,const char *l,vmhud::Receiver<8192> *b):route(r),label(l),rx(b) {}
   void onWrite(NimBLECharacteristic *c,NimBLEConnInfo &conn) override {
     if (conn.getConnHandle()!=g_conn) return;
     const std::string data=c->getValue();

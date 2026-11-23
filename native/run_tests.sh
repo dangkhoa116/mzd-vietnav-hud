@@ -15,7 +15,8 @@ CC=${CC:-gcc}
 cp "$TPMS/tpms/v3/test_v3_unit.c" "$BUILD/test_tpms_mux.c"
 "$CC" -O1 -Wall -Wextra -Werror -DTPMS_V3_UNIT -o "$BUILD/test_tpms_mux" \
     -DVN_VBS_HAVE_UNISTD "$BUILD/test_tpms_mux.c" "$BUILD/hud_native.c" \
-    "$BUILD/hud_guidance.c" "$BUILD/vn_vbs.c" "$BUILD/vn_vbs_dl.c" -ldl
+    "$BUILD/hud_guidance.c" "$BUILD/vn_vbs.c" "$BUILD/vn_vbs_dl.c" \
+    "$BUILD/hud_arrow.c" "$BUILD/arrow_model.c" "$BUILD/vendor/picojpeg/picojpeg.c" -ldl
 "$BUILD/test_tpms_mux"
 "$CC" -std=c99 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined \
     -fno-sanitize-recover=all -I native tests/native_fuzz.c native/hud_native.c \
